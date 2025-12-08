@@ -4,7 +4,6 @@
 
 # Session Data files
 .RData
-.RDataTmp
 
 # User-specific files
 .Ruserdata
@@ -39,11 +38,12 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# pkgdown site
-docs/
+# Mac hidden files
+.DS_Store
 
-# translation temp files
-po/*~
+# archived versions of programs and reports (no need as github effectively archives previous versions)
+archive/
+analysis_report/archive/
 
-# RStudio Connect folder
-rsconnect/
+# data directory
+data/
