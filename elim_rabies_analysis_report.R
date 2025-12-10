@@ -11,37 +11,37 @@
 rm(list=ls())
 graphics.off()
 
-# set timer running
+# Set timer running
 start.time <- Sys.time()
 
-# global settings
+# Global settings
 
-# is this the final run, with larger and slower bootstrap and MCMC samples,
+# Is this the final run, with larger and slower bootstrap and MCMC samples,
 # and with RNG seeds set?
 final.run <- FALSE
 
 
-# define vaccination coverage
+# Define vaccination coverage
 # Use vaccinated_M3 as the primary outcome - more reliable, although also lots of missing data
 # but include analysis of an alternative definition of coverage, vaccinated_M4,
 vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[1]
 
-# make simulations reproducible by setting RNG seed?
+# Make simulations reproducible by setting RNG seed?
 set.rng.seed <- final.run
 
-# iteration multiplier (slower and more accurate results)
+# Iteration multiplier (slower and more accurate results)
 iter.mult <- ifelse(final.run, 10, 0.1)
 
-# set minimum acceptable coverage threshold
+# Set minimum acceptable coverage threshold
 cov.thresh <- 0.4
 
-# need more time to load large data files
+# Need more time to load large data files
 options(timeout = 1000) 
 
 # mclapply needs this for set.seed to work
 RNGkind("L'Ecuyer-CMRG") 
 
-# turn off all open graphics devices
+# Turn off all open graphics devices
 graphics.off()
 
 # Choose colours to represent the two trial arms on plots
@@ -53,8 +53,7 @@ arm.colours <- c(`Team-based` = "#233E9B", `Community-based` = "#DA1728")
 
 ## Set report properties, working directory, filenames, word macro, etc ----
 
-# text for title page of tables output
-
+# Text for title page of tables output
 study.title <- "Eliminate Rabies Trial"             
 subtitle <- 
   paste0("Eliminating human rabies: impact of enhanced vaccination coverage (",
@@ -66,7 +65,7 @@ report.version<-"04"
 report.status<-paste(draft.or.final,"Report Version",report.version)    
 author<-"Paul Johnson"
 
-# set program directory and filename
+# Set program directory and filename
 root.dir<-""
 prog.directory<-root.dir
 prog.name<-
@@ -78,15 +77,13 @@ prog.name<-
 prog.file<-paste0(prog.directory,prog.name,".R")
 
 
-# set output file for tables
-
+# Set output file for tables
 file.out.directory<-paste0(prog.directory,brief.purpose,"_report")
 file.out.name<-paste0(prog.name,".doc")
 file.out<-paste(file.out.directory,file.out.name,sep="/")
 
-# create directories for figures and header/footer. 
-# delete old folder first to prevent old figures being used in latest version of report.
-
+# Create directories for figures and header/footer. 
+# Delete old folder first to prevent old figures being used in latest version of report.
 figures.directory<-
   paste0(
     file.out.directory,"/",substr(file.out.name,1,nchar(file.out.name)-4),
@@ -100,15 +97,14 @@ lapply(list(figures.directory,header.directory),dir.create, recursive = TRUE)
 
 ## Additional libraries ----
 
-# load functions 
+# Load functions 
 source(paste0(prog.directory,"functions/elim_rabies_functions.R"))
 
-# load packages
+# Load packages
 need.packages <-
   c("lubridate", "foreign", "Hmisc", "gdata", "lme4", "glmmTMB", "DHARMa", "ggplot2", "sjPlot",
     "parallel", "forcats", "brms", "bayesplot", "coda", "see", "vioplot")
 sapply(need.packages,install.load)
-
 
 
 ## Import and organise data ----
