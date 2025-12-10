@@ -11,7 +11,7 @@ message_parallel <- function(...){
   system(sprintf('echo "\n%s\n"', paste0(..., collapse="")))
 }
 
-# funtion to adjust binomial GLMM for jensen's inequality 
+# function to adjust binomial GLMM for jensen's inequality 
 jensen.adjust <-
   function(p, V, method = "mcculloch", inverse = FALSE) {
     stopifnot(!(method == "mcculloch" & inverse))
