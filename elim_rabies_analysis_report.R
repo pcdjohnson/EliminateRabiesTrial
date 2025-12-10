@@ -115,12 +115,8 @@ sapply(need.packages,install.load)
 
 ### Import, process and inspect data sets ----
 
-# Access the data via URL using a github personal access token: 
-# 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 (no expiry)
-urlrepo <- "https://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@raw.githubusercontent.com/DanniAnderson/T3CoverageAnalysis/main/"
-
 # Load survey data
-dat <- read.csv(url(paste0(urlrepo, "T3_Trial_Data.csv")))
+dat <- read.csv("data/T3_Trial_Data.csv")
 (data.names <- names(dat))
 nrow(dat)
 
@@ -128,7 +124,7 @@ nrow(dat)
 dat <- dat[order(dat$Round, dat$ward, dat$sub_village, dat$Household.file.id), ]
 
 # Load vaccination data
-vax <- read.csv(url(paste0(urlrepo, "T3_Vac_Trial_Data.csv")))
+vax <- read.csv("data/T3_Vac_Trial_Data.csv")
 dim(vax)
 names(vax)
 head(vax)
@@ -150,7 +146,7 @@ vax$day.vaccinated <- as.numeric(vax$date.vaccinated - min(vax$date.vaccinated))
 
 
 # Load estimated number of dogs per ward
-dog <- read.csv(url(paste0(urlrepo, "T3_Ward_Pop_Data.csv")))
+dog <- read.csv("data/T3_Ward_Pop_Data.csv")
 dim(dog)
 names(dog)
 head(dog)
@@ -206,7 +202,6 @@ rounds <-
     R3 = "Y2-V1", R4 = "Y2-V2", 
     R5 = "Y3-V1", R6 = "Y3-V2")
 dat$YearVisit <- factor(rounds[dat$Round])
-
 table(dat$YearVisit, dat$Round, exclude = NULL)
 label(dat$YearVisit) <- "Year-visit"
 
@@ -219,7 +214,6 @@ dat$Visit <- factor(substr(dat$YearVisit, 4, 5))
 table(dat$Year, dat$Visit)
 label(dat$Visit) <- "Visit"
 
-
 # Month of vaccination
 dat$month.vaccinated <- 
   factor(month(dat$date.vaccinated, label = TRUE), 
@@ -227,28 +221,23 @@ dat$month.vaccinated <-
          ordered = FALSE)
 label(dat$month.vaccinated) <- "Month vaccinated"
 
-
 # Precise dates of assessments
 dat$date.added <- as.Date(dat$date.added)
-
-# Time since vaccinated
-dat$years.since.vaccinated <- as.numeric(dat$date.added - as.Date(dat$date.vaccinated))/365
-label(dat$years.since.vaccinated) <- "Years since vaccinated"
-
-hist(365 * as.numeric(dat$years.since.vaccinated[dat$YearVisit %in% "Y1-V1"]), breaks = 100, 
-     xlab = "Days since vaccination", ylim = c(0, 100), main = "")
-title(paste("Time since vaccination for dogs surveyed in V1\nThe zero bar is truncated;",
-            sum(dat$years.since.vaccinated[dat$YearVisit %in% "Y1-V1"]==0, na.rm = T),
-            "dogs have vaccination date = survey date"), cex.main = 1)
 
 # Create a variable for the day of the trial year on which each dog was surveyed
 for(y in levels(dat$Year)) {
   y.num <- as.numeric(gsub("Y", "", y))
   dat$YearDay[dat$Year == y] <- (dat$date.added[dat$Year == y] - as.Date("2020-11-01") - 365 * (y.num - 1))
 }
+
+# Box plot of day of year vaccinated by trial year (1, 2 or 3) and visit (1 or 2).
+# The dashed line at end of year shows the extent to which vaccinations leaked into 
+# the following year.
 boxplot(YearDay ~ YearVisit, data = dat, ylim = c(0, max(dat$YearDay)))
 abline(h = 365, lty = 2)
 
+
+# Calculate the date range for each of the 6 surveys (2 visits X 3 years)
 visit.durations <- tapply(dat$date.added, dat$Visit, function(x) diff(range(x)))
 round(12 *  visit.durations/ 365, 1)
 round(12 *  mean(visit.durations)/ 365, 1)
@@ -259,18 +248,11 @@ visit.date.ranges <-
 rownames(visit.date.ranges) <- levels(dat$YearVisit)
 visit.date.ranges
 
+# Duration of each survey in months
 round(12 * diff(mean.visit.dates)/365, 1)
 round(12 * mean(diff(mean.visit.dates)[c(1, 3, 5)])/365, 1)
 
-ggplot(data = dat, aes(x = date.added, y = Visit, color = district6)) +
-  geom_vline(xintercept = mean.visit.dates, linetype = "dashed", alpha = 0.5) +
-  geom_jitter(width = 0, height = 0.5, alpha = 0.3, size = 0.1) +
-  guides(col = "none") + 
-  theme_minimal()
-
-
-# Need to make duplicated ward names unique by adding the 
-# district name
+# Make duplicated ward names unique by adding the district name
 length(unique(dat$ward))
 dat$ward <- factor(paste(dat$ward, substr(dat$district, 1, 1), sep = "-"))
 table(dat$ward)
@@ -280,7 +262,6 @@ nlevels(dat$ward)
 setdiff(levels(dat$ward), levels(vax$ward))
 setdiff(levels(vax$ward), levels(dat$ward))
 
-
 # Create unique sub-village names:
 length(unique(dat$sub_village))
 dat$sub_village <- factor(paste(dat$sub_village, dat$ward, sep = "-"))
@@ -289,32 +270,28 @@ nlevels(dat$sub_village)
 # Create a factor for sub-village-visit, for fitting a random effect to.
 dat$sub_village.rnd <- factor(paste(dat$sub_village, dat$YearVisit, sep = "-"))
 
-
 # Create a factor for ward-visit
 dat$ward.rnd <- 
   factor(paste(dat$ward, dat$YearVisit, sep = "-"),
          apply(expand.grid(levels(dat$ward), levels(dat$YearVisit)), 1, paste, collapse = "-"))
 
-
 # Create a factor for district-visit, for fitting a random effect to.
 dat$district.rnd <- factor(paste(dat$district, dat$YearVisit, sep = "-"))
 
-
-# Land use
+# Land use factor
 dat$LandUse <- factor(dat$LandUse)
 label(dat$LandUse) <- "Land use"
 
-# Sex
+# Sex factor
 dat$Sex <- factor(dat$Sex)
 label(dat$Sex) <- "Sex"
 
-# Sex and pregnancy
+# Sex and pregnancy factor
 dat$Sex.pregnant <- 
   factor(paste0(dat$Sex, dat$pregnant), 
          c("FemaleFALSE", "FemaleTRUE", "MaleFALSE"),
          c("Non-pregnant female", "Pregnant female", "Male"))
 label(dat$Sex.pregnant) <- "Sex and pregnancy"
-
 
 # Inspect data
 names(dat)
@@ -322,22 +299,17 @@ head(dat)
 sample.rows(dat)
 dim(dat)
 
-
 # Get list of ward-visit with fewer than 30 dogs, and those with more than 60
 ward.rnd.tab <- table(dat$ward.rnd[dat$YearVisit != "Y3-V2"], exclude = NULL)
 ward.rnd.tab <- ward.rnd.tab[-grep("-Y3-V2", names(ward.rnd.tab))]
 ward.rnd.eq0 <- sort(names(ward.rnd.tab)[ward.rnd.tab == 0])
 ward.rnd.lt30 <- sort(names(ward.rnd.tab)[ward.rnd.tab < 30 & ward.rnd.tab > 0])
 ward.rnd.gt60 <- sort(names(ward.rnd.tab)[ward.rnd.tab > 60])
-
 unique(dat[dat$ward %in% substr(ward.rnd.eq0, 1, nchar(ward.rnd.eq0) - 6), c("Village", "ward", "latitude")])
-
 sort(table(dat$ward[dat$ward.rnd %in% ward.rnd.lt30]))
-
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.lt30 & dat$LandUse == "Rural", c("ward", "YearVisit")])))
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.lt30 & dat$LandUse == "Semi-Urban", c("ward", "YearVisit")])))
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.lt30 & dat$LandUse == "Urban", c("ward", "YearVisit")])))
-
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.gt60 & dat$LandUse == "Rural", c("ward", "YearVisit")])))
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.gt60 & dat$LandUse == "Semi-Urban", c("ward", "YearVisit")])))
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.gt60 & dat$LandUse == "Urban", c("ward", "YearVisit")])))
@@ -365,10 +337,11 @@ barplot(table(dat$YearVisit), ylab = "No of dogs", xlab = "Visit")
 # Number of dogs by ward
 barplot(rev(sort(table(dat$ward))), ylab = "No of dogs", xlab = "Ward", names.arg = FALSE)
 
-# create a data set of wards
+# Create a data set of wards
 wards <- data.frame(name = levels(dat$ward))
 rownames(wards) <- wards$name
 
+# Add district factors to the wards data
 wards$district <- factor(tapply(as.character(dat$district), dat$ward, unique)[rownames(wards)])
 wards$district6 <- factor(tapply(dat$district6, dat$ward, unique)[rownames(wards)])
 label(wards$district) <- label(wards$district6) <- "District"
@@ -379,7 +352,7 @@ wards$LandUse <-
          levels(dat$LandUse))
 label(wards$LandUse) <- "Land use"
 
-# re-order wards by district order
+# Re-order wards by district order
 wards <- wards[order(wards$district), ]
 
 # Add the total number of dogs vaccinated in each ward
@@ -390,15 +363,15 @@ label(wards$n.vaccinated) <- "N vaccinations"
 wards$n.dogs <- dog$DogPop[match(rownames(wards), dog$ward)]
 label(wards$n.dogs) <- "N dogs (estimated)"
 
-# add the intervention allocations to the wards data set
+# Add the intervention allocations to the wards data set
 wards$Trial_Arm <- 
   factor(tapply(dat$Trial_Arm, dat$ward, unique)[rownames(wards)], 
          c("Pulse", "Continuous" ), names(arm.colours))
 
-# check that the numbers in each group are reasonably even within each district
+# Check that the numbers in each group are reasonably even within each district
 tapply(wards$Trial_Arm, wards$district6, function(x) diff(table(x)))
 
-# check the number of wards allocated to each treatment overall
+# Check the number of wards allocated to each treatment overall
 table(wards$Trial_Arm)
 table(wards$Trial_Arm, wards$district6)
 
@@ -428,7 +401,7 @@ dat$Trial_Arm.rnd <-
 
 ### Choose the outcome measure (define coverage) ----
 
-# define coverage following the choice of outcome measure in the global settings
+# Define coverage following the choice of outcome measure in the global settings
 dat$Vaccinated <- dat[, vaccination.definition]
 
 # Create categorical variables for vaccinated / not / missing
@@ -449,18 +422,17 @@ dat$Vaccinated2 <- dat$Vaccinated_M4
 dat$Vaccinated2.cat <- dat$Vaccinated2
 dat$Vaccinated2.cat <- factor(dat$Vaccinated2.cat, c(0, 1), c("Not vaccinated", "Vaccinated"))
 label(dat$Vaccinated2.cat) <- label(dat$Vaccinated2) <- "Secondary coverage outcome"
-
 table(Primary = dat$Vaccinated.cat, Secondary = dat$Vaccinated2.cat, exclude = NULL)
 
 
-# add coverage data to the wards data set
+# Add coverage data to the wards data set
 wards$Coverage <- tapply(dat$Vaccinated, dat$ward, mean, na.rm = TRUE)[rownames(wards)]
 label(wards$Coverage) <- "Mean coverage (primary outcome)"
 wards$Coverage2 <- tapply(dat$Vaccinated2, dat$ward, mean)[rownames(wards)]
 label(wards$Coverage2) <- "Mean coverage (secondary outcome)"
 
-# add n dogs vaxxed and unvaxxed under both primary and secondary
-# these are actually the same but calculate them separately for completeness
+# Add n dogs vaxxed and unvaxxed under both primary and secondary outcomes.
+# These are actually the same but calculate them separately for completeness.
 wards$Vaccinated <- tapply(dat$Vaccinated, dat$ward, sum, na.rm = TRUE)[rownames(wards)]
 label(wards$Vaccinated) <- "N dogs vaccinated"
 wards$Vaccinated2 <- tapply(dat$Vaccinated2, dat$ward, sum)[rownames(wards)]
@@ -470,23 +442,24 @@ label(wards$Total) <- "N dogs surveyed"
 wards$Total2 <- tapply(dat$Vaccinated2, dat$ward, function(x) sum(!is.na(x)))[rownames(wards)]
 label(wards$Total2) <- "N dogs surveyed (secondary outcome)"
 
-
+# Show the number of dogs vaccinated by subvillage and visit-year for a random ward
 tab <- 
   with(dat[dat$ward == sample(levels(dat$ward), 1), ], {
     table(sub_village, YearVisit)
   })
 tab[rowSums(tab) > 0, ]
 
+# Compare coverage between the two outcome definitions
 plot(wards$Coverage, wards$Coverage2, cex = 4 * wards$Vaccinated/max(wards$Vaccinated))
 abline(0, 1)
 cor.test(wards$Coverage, wards$Coverage2)
 
-# Compare survey vaccination coverage and vaccination delivery coverage
+# Compare survey-based vaccination coverage 
+# with coverage based on the number of vaccines delivered
 plot(wards$Coverage, wards$n.vaccinated/(3*wards$n.dogs), xlim = 0:1, ylim = 0:1)
 axis(2)
 abline(0, 1)
 cor.test(wards$Coverage, wards$n.vaccinated/(3*wards$n.dogs))
-
 
 # Add other characteristics to the wards data frame
 head(dat)
@@ -498,14 +471,15 @@ label(wards$SV_V_Distance) <- "Mean subvillage-village distance (km)"
 wards$Completeness <- 100 * rowSums(table(dat$ward, dat$YearVisit) > 0)[rownames(wards)] / nlevels(dat$YearVisit)
 label(wards$Completeness) <- "Survey completeness (%)"
 
+# Compare raw coverage between arms, by land use category
 tapply(wards$Coverage, list(wards$LandUse, wards$Trial_Arm), mean)
 table(wards$LandUse, wards$Trial_Arm)
 
+# Calculate the number of households surveyed by ward and visit-year
 no.of.hh.surveyed <- 
   tapply(dat, dat[, c("ward", "YearVisit")], 
          function(x) sum(colSums(table(droplevels(x)$Household.file.id, droplevels(x)$sub_village) > 0.5)),
          simplify = FALSE)
-
 summary(unlist(no.of.hh.surveyed))
 sort(unlist(no.of.hh.surveyed))
 table(unlist(no.of.hh.surveyed) >= 25)
@@ -558,24 +532,25 @@ wards.rnd$YearDay[is.na(wards.rnd$YearDay)] <-
 wards.rnd$YearDay.mean <-
   round(tapply(wards.rnd$YearDay, wards.rnd$YearVisit, mean))[as.character(wards.rnd$YearVisit)]
 
-# convert day of trial year to month of trial year, rounded to nearest month
+# Convert day of trial year to month of trial year, rounded to nearest month
 wards.rnd$YearMonth.mean <- round(wards.rnd$YearDay.mean * 12 / 365 + 0.5) 
 
-# what was the mean month of each visit
+# What was the mean month of each visit
 (mean.visit.month <- tapply(wards.rnd$YearMonth.mean, wards.rnd$Visit, mean))
 
-# Add coverage
+# Add coverage (primary outcome)
 wards.rnd[, c("NotVaccinated", "Vaccinated")] <-
   table(dat$ward.rnd, dat$Vaccinated)[rownames(wards.rnd), c("0", "1")]
 wards.rnd$N <- wards.rnd$Vaccinated + wards.rnd$NotVaccinated
 wards.rnd$Coverage <- wards.rnd$Vaccinated / wards.rnd$N
 
+# Add coverage (secondary outcome)
 wards.rnd[, c("NotVaccinated2", "Vaccinated2")] <-
   table(dat$ward.rnd, dat$Vaccinated2)[rownames(wards.rnd), c("0", "1")]
 wards.rnd$N2 <- wards.rnd$Vaccinated2 + wards.rnd$NotVaccinated2
 wards.rnd$Coverage2 <- wards.rnd$Vaccinated2 / wards.rnd$N2
 
-# remove rows with no coverage data
+# Remove rows with no coverage data
 wards.rnd.reduced <- wards.rnd[wards.rnd$N > 0, ]
 wards.rnd.reduced$ward.short <- 
   factor(sapply(strsplit(as.character(wards.rnd.reduced$ward), "\\-"), "[", 1))
@@ -593,7 +568,6 @@ cbind(table(wards.rnd.reduced$YearVisit, wards.rnd.reduced$Trial_Arm),
 sv.without.coords <- levels(droplevels(dat$sub_village[is.na(dat$SV_V_Distance)]))
 dat[dat$sub_village %in% sv.without.coords, ]
 
-
 # Take a look at the subvillage-village distances
 sv.v.distances <- tapply(dat$SV_V_Distance, dat$sub_village, function(x) unique(na.omit(x)))
 hist(unlist(sv.v.distances), breaks = 50)
@@ -601,8 +575,6 @@ summary(unlist(sv.v.distances))
 hist(scale(log10(dat$SV_V_Distance)))
 dat$SV_V_Distance.log10.scaled <- scale(log10(dat$SV_V_Distance))
 
-# Descriptive analysis
-table(dat$Village, dat$YearVisit)
 # Coverage proportion by arm and visit
 covtab <- prop.table(table(dat$Trial_Arm, dat$YearVisit, dat$Vaccinated), 1:2)[, , "1"]
 barplot(covtab, beside = TRUE, legend.text = TRUE, 
@@ -615,10 +587,6 @@ table(YearsVaccinated = dat$years.vaccinated,
       exclude = NULL)
 
 # Ever vaccinated: this round / earlier round / never
-dat$years.vaccinated
-dat$date.vaccinated
-min(dat$date.vaccinated, na.rm = TRUE)
-
 year.vax.start.dates <- as.Date(c(Y1 = "2020-11-01", Y2 = "2021-11-01", Y3 = "2022-11-01"))
 dat$ever.vacc.calc <- factor(NA, c("Never", "Earlier year", "This year"))
 
@@ -644,11 +612,8 @@ dat$ever.vacc.y3[dat$Year %in% "Y3" & dat$Vaccinated %in% 0] <- "Never"
 table(dat$ever.vacc.y3, exclude = NULL)
 table(dat$years.vaccinated[dat$Year %in% "Y3"], 
       dat$ever.vacc.calc[dat$Year %in% "Y3"], exclude = NULL)
-
 table(SurveyQ = dat$ever.vacc.y3, CalcFromDate = dat$ever.vacc.calc)
-
 table(EverVacc = dat$ever.vacc.calc, Vaccinated = dat$Vaccinated, dat$Year, exclude = TRUE)
-
 
 # Define labels and definitions for ward.rnd variables
 label(wards.rnd$ward.rnd) <- "Ward-year-visit"
@@ -674,7 +639,6 @@ label(wards.rnd$N2) <- "No of dogs surveyed (secondary outcome)"
 label(wards.rnd$Coverage2) <- "Coverage (secondary outcome)"
 attr(wards.rnd$Coverage2, "definition") <- "Vaccinated2/N2"
 
-
 # Apply variable names as labels, as a default where a label hasn't already been applied
 for(nm in names(dat)) {
   if(label(dat[, nm]) == "") {
@@ -682,14 +646,12 @@ for(nm in names(dat)) {
     label(dat[, nm]) <- gsub("_", " ", nm)
   } 
 }; rm(nm)
-
 for(nm in names(wards)) {
   if(label(wards[, nm]) == "") {
     label(wards[, nm]) <- nm
     label(wards[, nm]) <- gsub("_", " ", nm)
   }
 }; rm(nm) 
-
 for(nm in names(wards.rnd)) {
   if(label(wards.rnd[, nm]) == "") {
     label(wards.rnd[, nm]) <- nm
@@ -697,11 +659,10 @@ for(nm in names(wards.rnd)) {
   } 
 }; rm(nm) 
 
-
+# Check labels
 label(dat)
 label(wards)
 label(wards.rnd)
-
 
 ## Perform analyses ----
 
@@ -753,8 +714,7 @@ primary.analysis$full.model <-
           family = binomial, data = primary.analysis$analysis.data)
 summary(primary.analysis$full.model)
 
-
-# check that the whole analysis data set was used
+# Check that the whole analysis data set was used
 stopifnot(nrow(primary.analysis$analysis.data) == nrow(model.matrix(primary.analysis$full.model)))
 
 # Fit primary analysis null model
@@ -769,8 +729,8 @@ primary.analysis$likelihood.ratio.test <-
 primary.analysis$likelihood.ratio.test
 
 # Primary analysis p-value
-primary.analysis$intervention.p.value <- primary.analysis$likelihood.ratio.test[2, "Pr(>Chisq)"]
-
+primary.analysis$intervention.p.value <- 
+  primary.analysis$likelihood.ratio.test[2, "Pr(>Chisq)"]
 
 # Make table storing treatment effect at each of the six year-visits,
 # with estimates and 95% CI
@@ -786,7 +746,6 @@ pred.tab$YearVisit <- factor(paste(pred.tab$Year, pred.tab$Visit, sep = "-"), le
 rownames(pred.tab) <- paste(pred.tab$Year, pred.tab$Visit, pred.tab$Trial_Arm, sep = "-")
 pred.tab$x <- as.numeric(pred.tab$YearVisit) + (as.numeric(pred.tab$Trial_Arm) - 1.5)/20
 
-
 # Create matrix for extracting log OR at each time point 
 X <- model.matrix(formula(primary.analysis$full.model, fixed.only = TRUE), 
                   data = cbind(pred.tab, Vaccinated = 1))
@@ -797,7 +756,6 @@ A <- X[pred.tab$Trial_Arm == "Community-based", ] - X[pred.tab$Trial_Arm == "Tea
 primary.analysis$re.var <- unlist(VarCorr(primary.analysis$full.model)$cond)
 V <- sum(primary.analysis$re.var)
 z <- 1/sqrt(1 + ((16 * sqrt(3))/(15 * pi))^2 * V)
-
 effect.data$InterventionOR.log <- (A %*% fixef(primary.analysis$full.model)$cond)[, 1]
 effect.data$InterventionOR.log.se <- sqrt(diag(A %*% vcov(primary.analysis$full.model)$cond %*% t(A)))
 effect.data$InterventionOR.log.ci.lo <- effect.data$InterventionOR.log - qnorm(0.975) * effect.data$InterventionOR.log.se
@@ -810,8 +768,6 @@ effect.data$x <-  as.numeric(effect.data$YearVisit)
 # Add effect estimate table to primary analysis list
 primary.analysis$effect.estimates <- effect.data
 rm(X, A)
-
-
 
 # Calculate predicted coverage at each of the six time points in each arm, with 95% CIs,
 # adjusted for Jensen's inequality
@@ -862,7 +818,7 @@ secondary.analyses$no1$null.model <-
            I(Trial_Arm.rnd == "Y3-V1-Community-based"))
 
 
-# check that the two analysis data sets match in size
+# Check that the two analysis data sets match in size
 stopifnot(nrow(model.matrix(secondary.analyses$no1$null.model)) == 
             nrow(model.matrix(primary.analysis$full.model)))
 
@@ -901,50 +857,54 @@ secondary.analyses$no2$full.model <-
             (1 | ward) + (1 | ward.rnd) + 
             (1 | district) + (1 | district.rnd), 
           family = binomial, data = primary.analysis$analysis.data)
-AIC(secondary.analyses$no2$full.model)
 logLik(secondary.analyses$no2$full.model)
 summary(secondary.analyses$no2$full.model)
 
 # Test the 3-way interaction
 secondary.analyses$no2$no.3way.ixn.model <- 
   update(secondary.analyses$no2$full.model, ~ . - YearDay:Year:Trial_Arm)
-
 secondary.analyses$no2$no.3way.ixn.p.value <- 
   anova(secondary.analyses$no2$full.model, secondary.analyses$no2$no.3way.ixn.model)[2, "Pr(>Chisq)"]
-
 secondary.analyses$no2$drop.2way.ixns <-
   drop1(secondary.analyses$no2$no.3way.ixn.model, test = "Chisq")
 secondary.analyses$no2$no.2way.ixn.p.values <- 
   secondary.analyses$no2$drop.2way.ixns[-1, "Pr(>Chi)"]
 names(secondary.analyses$no2$no.2way.ixn.p.values) <- rownames(secondary.analyses$no2$drop.2way.ixns)[-1]
 
+# Drop non-significant 2-way interaction
 secondary.analyses$no2$final.model <- 
   update(secondary.analyses$no2$no.3way.ixn.model, ~ . - YearDay:Year)
-# run this line to show that all remaining higher order terms are significant at P < 0.05
-drop1(secondary.analyses$no2$final.model, test = "Chisq")
 
+# Run this line to show that all remaining higher order terms are significant at P < 0.05
+drop1(secondary.analyses$no2$final.model, test = "Chisq")
 
 # Create data set for predicting monthly coverage by arm and year
 newdata.by.month.and.arm <-
   expand.grid(YearMonth = 1:12,
               Year = levels(dat$Year),
               ward = levels(dat$ward))
-newdata.by.month.and.arm$Trial_Arm <- wards$Trial_Arm[match(newdata.by.month.and.arm$ward, wards$name)]
+newdata.by.month.and.arm$Trial_Arm <- 
+  wards$Trial_Arm[match(newdata.by.month.and.arm$ward, wards$name)]
 dim(newdata.by.month.and.arm)
 
 # Calculate day from month
-newdata.by.month.and.arm$YearDay <- round(365 * (newdata.by.month.and.arm$YearMonth - 0.5) / 12)
-newdata.by.month.and.arm$YearMonth <- factor(newdata.by.month.and.arm$YearMonth, 1:12)
+newdata.by.month.and.arm$YearDay <- 
+  round(365 * (newdata.by.month.and.arm$YearMonth - 0.5) / 12)
+newdata.by.month.and.arm$YearMonth <- 
+  factor(newdata.by.month.and.arm$YearMonth, 1:12)
 
 # Add visit and district
-newdata.by.month.and.arm$Visit <- factor(newdata.by.month.and.arm$YearDay > 365/2, c(FALSE, TRUE), levels(dat$Visit))
+newdata.by.month.and.arm$Visit <- 
+  factor(newdata.by.month.and.arm$YearDay > 365/2, c(FALSE, TRUE), levels(dat$Visit))
 newdata.by.month.and.arm$ward.rnd <- 
   factor(paste(newdata.by.month.and.arm$ward, 
                newdata.by.month.and.arm$Year, 
                newdata.by.month.and.arm$Visit, sep = "-"),
          levels(dat$ward.rnd))
-newdata.by.month.and.arm$district <- wards[as.character(newdata.by.month.and.arm$ward), "district"]
-newdata.by.month.and.arm$district.rnd <- wards.rnd[as.character(newdata.by.month.and.arm$ward.rnd), "district.rnd"]
+newdata.by.month.and.arm$district <- 
+  wards[as.character(newdata.by.month.and.arm$ward), "district"]
+newdata.by.month.and.arm$district.rnd <- 
+  wards.rnd[as.character(newdata.by.month.and.arm$ward.rnd), "district.rnd"]
 
 # Add ward-Year 
 newdata.by.month.and.arm$ward.Year <- 
@@ -959,21 +919,21 @@ secondary.analyses$no2$nsim <- max(10, 1000 * iter.mult)
 # so need to include all random effects at that level and above
 which.re.to.include <- c("ward.rnd", "ward", "district.rnd", "district")
 
-# immediately before simulating from the model, set a random number seed using
+# Immediately before simulating from the model, set a random number seed using
 # https://www.random.org/integers/?num=1&min=0&max=1000000000&col=1&base=10&format=html&rnd=new
 # Here are your random numbers: 606505365
 # Timestamp: 2024-04-22 12:58:09 UTC
 if(set.rng.seed) set.seed(606505365)
 
-# simulate nsim responses from the primary analysis model, including random effect variation
+# Simulate nsim responses from the primary analysis model, including random effect variation
 sim.response1 <- simulate(primary.analysis$full.model, nsim = secondary.analyses$no2$nsim)
 dim(sim.response1)
 
-# simulate nsim responses from the secondary analysis #2 model, including random effect variation
+# Simulate nsim responses from the secondary analysis #2 model, including random effect variation
 sim.response2 <- simulate(secondary.analyses$no2$final.model, nsim = secondary.analyses$no2$nsim)
 dim(sim.response2)
 
-# get no of vaccinated dogs from first simulation, to check consistency with set seed
+# Get no of vaccinated dogs from first simulation, to check consistency with set seed
 sum(sim.response1[[1]][, 1])
 
 # First set RNG seed
@@ -1060,10 +1020,12 @@ sim.fits.list <-
   }, mc.cores = detectCores() - 1)
 
 
-# extract tables of predicted coverage
-pred.cov.by.month.and.arm <- do.call("cbind", lapply(sim.fits.list, "[[", "pred.cov.by.month.and.arm"))
+# Extract tables of predicted coverage
+pred.cov.by.month.and.arm <- 
+  do.call("cbind", lapply(sim.fits.list, "[[", "pred.cov.by.month.and.arm"))
 dim(pred.cov.by.month.and.arm)
-pred.cov.by.survey.and.arm <- do.call("cbind", lapply(sim.fits.list, "[[", "pred.cov.by.survey.and.arm"))
+pred.cov.by.survey.and.arm <- 
+  do.call("cbind", lapply(sim.fits.list, "[[", "pred.cov.by.survey.and.arm"))
 dim(pred.cov.by.survey.and.arm)
 
 # sum elements of both tables to check reproducibility when set.rng.seed is TRUE
@@ -1096,33 +1058,40 @@ pred.tab$CoveragePB.ci.hi <- apply(pred.cov.by.survey.and.arm, 1, quantile, 0.97
 
 
 # plot coverage estimates
-estimate.ci.plot(x.term = "x", y.term = "CoveragePB", y.ci.lo = "CoveragePB.ci.lo", y.ci.hi = "CoveragePB.ci.hi", 
-                 plotdata = pred.tab, xlab = "Visit", ylab = "Coverage", pch = 20 + as.numeric(pred.tab$Trial_Arm), 
+estimate.ci.plot(x.term = "x", y.term = "CoveragePB", 
+                 y.ci.lo = "CoveragePB.ci.lo", y.ci.hi = "CoveragePB.ci.hi", 
+                 plotdata = pred.tab, xlab = "Visit", ylab = "Coverage", 
+                 pch = 20 + as.numeric(pred.tab$Trial_Arm), 
                  ylim = 0:1,
-                 bg = as.numeric(pred.tab$Trial_Arm) + 4, main = "Parametric bootstrap estimates",
+                 bg = as.numeric(pred.tab$Trial_Arm) + 4, 
+                 main = "Parametric bootstrap estimates",
                  x.at = unique(round(pred.tab$x)), x.labels = levels(pred.tab$YearVisit))
 legend("topleft", legend = levels(dat$Trial_Arm), pch = 20 + 1:nlevels(dat$Trial_Arm),
        pt.bg = 1:nlevels(dat$Trial_Arm) + 4)
 
-estimate.ci.plot(x.term = "x", y.term = "Coverage", y.ci.lo = "Coverage.ci.lo", y.ci.hi = "Coverage.ci.hi", 
-                 plotdata = pred.tab, xlab = "Visit", ylab = "Coverage", pch = 20 + as.numeric(pred.tab$Trial_Arm), 
+estimate.ci.plot(x.term = "x", y.term = "Coverage", y.ci.lo = "Coverage.ci.lo", 
+                 y.ci.hi = "Coverage.ci.hi", 
+                 plotdata = pred.tab, xlab = "Visit", ylab = "Coverage", 
+                 pch = 20 + as.numeric(pred.tab$Trial_Arm), 
                  ylim = 0:1,
-                 bg = as.numeric(pred.tab$Trial_Arm) + 4, main = "Mean and Wald CI",
+                 bg = as.numeric(pred.tab$Trial_Arm) + 4, 
+                 main = "Mean and Wald CI",
                  x.at = unique(round(pred.tab$x)), x.labels = levels(pred.tab$YearVisit))
 legend("topleft", legend = levels(dat$Trial_Arm), pch = 20 + 1:nlevels(dat$Trial_Arm),
        pt.bg = 1:nlevels(dat$Trial_Arm) + 4)
 
 estimate.ci.plot(x.term = "x", y.term = "Coverage.simple", 
-                 plotdata = pred.tab, xlab = "Visit", ylab = "Coverage", pch = 20 + as.numeric(pred.tab$Trial_Arm), 
+                 plotdata = pred.tab, xlab = "Visit", ylab = "Coverage", 
+                 pch = 20 + as.numeric(pred.tab$Trial_Arm), 
                  ylim = 0:1,
-                 bg = as.numeric(pred.tab$Trial_Arm) + 4, main = "Simple mean coverage",
+                 bg = as.numeric(pred.tab$Trial_Arm) + 4, 
+                 main = "Simple mean coverage",
                  x.at = unique(round(pred.tab$x)), x.labels = levels(pred.tab$YearVisit))
 legend("topleft", legend = levels(dat$Trial_Arm), pch = 20 + 1:nlevels(dat$Trial_Arm),
        pt.bg = 1:nlevels(dat$Trial_Arm) + 4)
 
 # The estimates and CI are almost identical between the standard mean and Wald CIs and the bootstrapped CIs,
 # and the Wald CIs are much faster to produce, so stick with these.
-
 pred.tab[, c("Coverage.simple", "Coverage", "CoveragePB")]
 par(mfrow = c(2, 2))
 plot(CoveragePB ~ Coverage, data = pred.tab, xlim = 0:1, ylim = 0:1)
@@ -1143,41 +1112,34 @@ primary.analysis$effect.estimates$Team <-
   paste0(my.format(pred.tab$Coverage[pred.tab$Trial_Arm == "Team-based"], ndp = 2), " (",
          my.format(pred.tab$Coverage.ci.lo[pred.tab$Trial_Arm == "Team-based"], ndp = 2), ", ",
          my.format(pred.tab$Coverage.ci.hi[pred.tab$Trial_Arm == "Team-based"], ndp = 2), ")") 
-
 primary.analysis$effect.estimates$Community <-
   paste0(my.format(pred.tab$Coverage[pred.tab$Trial_Arm == "Community-based"], ndp = 2), " (",
          my.format(pred.tab$Coverage.ci.lo[pred.tab$Trial_Arm == "Community-based"], ndp = 2), ", ",
          my.format(pred.tab$Coverage.ci.hi[pred.tab$Trial_Arm == "Community-based"], ndp = 2), ")") 
-
 primary.analysis$effect.estimates$`Odds ratio (95% CI)` <- 
   paste0(my.format(primary.analysis$effect.estimates$InterventionOR, ndp = 2), " (",
          my.format(primary.analysis$effect.estimates$InterventionOR.ci.lo, ndp = 2), ", ",
          my.format(primary.analysis$effect.estimates$InterventionOR.ci.hi, ndp = 2), ")") 
-
 primary.analysis$effect.estimates$`P-value` <- 
   p.format(primary.analysis$effect.estimates$Intervention.p.value)
-
 primary.analysis$effect.estimates$`Year-visit` <- primary.analysis$effect.estimates$YearVisit
-
 primary.analysis$effect.estimates <- 
   primary.analysis$effect.estimates[, c("Year-visit", "Team", "Community", "Odds ratio (95% CI)", "P-value")]
-
 
 # Add the coverage estimates to the primary analysis list
 primary.analysis$predicted.coverage <- pred.tab
 
-
 # Calculate mean and 95% CI coverage across the three years of the trial from
 # the parametric bootstrap samples
 boot.mean.coverage.by.arm <-
-  apply(pred.cov.by.month.and.arm, 2, function(x) tapply(x, newdata.by.month.and.arm$Trial_Arm, mean))
+  apply(pred.cov.by.month.and.arm, 2, 
+        function(x) tapply(x, newdata.by.month.and.arm$Trial_Arm, mean))
 mean.coverage <- my.format(apply(boot.mean.coverage.by.arm, 1, mean), ndp = 2)
 mean.coverage.ci95 <- 
   paste0(mean.coverage, " (",
          apply(my.format(apply(boot.mean.coverage.by.arm, 1, quantile, c(0.025, 0.975)), ndp = 2), 
                2, paste, collapse = ", "), ")")
 names(mean.coverage.ci95) <- sapply(strsplit(names(mean.coverage), "-"), "[", 1)
-
 
 # Calculate mean and 95% odds ratios across the three years of the trial from
 # the parametric bootstrap samples
@@ -1209,12 +1171,10 @@ head(coverage.dist)
 dim(coverage.dist)
 table(coverage.dist$Simulation, coverage.dist$YearMonth, coverage.dist$Trial_Arm)
 
-
-# get mean coverage by month, with 95% CI from parametric bootstrap
+# Get mean coverage by month, with 95% CI from parametric bootstrap
 newdata.by.month.and.arm$Coverage.mean <- apply(pred.cov.by.month.and.arm, 1, mean)
 newdata.by.month.and.arm$Coverage.ci.lo <- apply(pred.cov.by.month.and.arm, 1, quantile, 0.025)
 newdata.by.month.and.arm$Coverage.ci.hi <- apply(pred.cov.by.month.and.arm, 1, quantile, 0.975)
-
 secondary.analyses$no2$cov.dist.by.month.and.arm.mean <- 
   tapply(newdata.by.month.and.arm$Coverage.mean, 
          newdata.by.month.and.arm[, c("YearMonth", "Trial_Arm")], 
@@ -1242,13 +1202,11 @@ for(arm in levels(dat$Trial_Arm)) {
            ")")
 }
 
-
-# get mean coverage < threshold by month, with 95% CI from parametric bootstrap
+# Get mean coverage < threshold by month, with 95% CI from parametric bootstrap
 Coverage.lt40.boot <- 
   sapply(1:ncol(pred.cov.by.month.and.arm), function(j) {
     tapply(pred.cov.by.month.and.arm[, j] < cov.thresh, newdata.by.month.and.arm[, c("YearMonth", "Trial_Arm")], mean)
   })
-
 secondary.analyses$no2$cov.lt40.by.month.and.arm.mean <- 
   matrix(apply(Coverage.lt40.boot, 1, mean), ncol = nlevels(dat$Trial_Arm),
          dimnames = dimnames(secondary.analyses$no2$cov.dist.by.month.and.arm.mean))
@@ -1258,7 +1216,6 @@ secondary.analyses$no2$cov.lt40.by.month.and.arm.ci.lo <-
 secondary.analyses$no2$cov.lt40.by.month.and.arm.ci.hi <- 
   matrix(apply(Coverage.lt40.boot, 1, quantile, 0.975), ncol = nlevels(dat$Trial_Arm),
          dimnames = dimnames(secondary.analyses$no2$cov.dist.by.month.and.arm.mean))
-
 secondary.analyses$no2$cov.lt40.table <- 
   secondary.analyses$no2$cov.lt40.by.month.and.arm.mean
 for(arm in levels(dat$Trial_Arm)) {
@@ -1273,10 +1230,7 @@ for(arm in levels(dat$Trial_Arm)) {
            ")")
 }
 
-
-
 # Estimate the probability of a random (new) ward being below the coverage threshold
-
 lt.thresh.Trial_Arm <- 
   data.frame(
     Estimate = 
@@ -1292,6 +1246,7 @@ lt.thresh.Trial_Arm <-
 # Month and Year and the random effects of ward, ward.rnd, district, district.rnd
 lt.thresh.Trial_Arm
 
+# Add these proportion estimates to the secondary analyses no 2 list
 secondary.analyses$no2$prop.estimates.overall <-
   data.frame(rownames(lt.thresh.Trial_Arm),
              paste0(my.format(lt.thresh.Trial_Arm$Estimate, ndp = 2),  " (",
@@ -1299,19 +1254,6 @@ secondary.analyses$no2$prop.estimates.overall <-
                     my.format(lt.thresh.Trial_Arm$Estimate.ci.hi, ndp = 2), ")"))
 names(secondary.analyses$no2$prop.estimates.overall) <- c("Trial Arm", paste0("P(Coverage<", cov.thresh, ") (95% CI)"))
 secondary.analyses$no2$prop.estimates.overall
-
-
-# Repeat the above but break down the probability of coverage < threshold by month (and by arm)
-# lt.thresh.Trial_Arm.month <-
-#  data.frame(
-#    Estimate =
-#      tapply(coverage.dist$Coverage < cov.thresh, coverage.dist[, c("Trial_Arm", "YearMonth")], mean),
-#    Estimate.ci.lo =
-#      apply(tapply(coverage.dist$Coverage < cov.thresh, coverage.dist[, c("Trial_Arm", "Simulation")], mean), 1, quantile, 0.025),
-#    Estimate.ci.hi =
-#      apply(tapply(coverage.dist$Coverage < cov.thresh, coverage.dist[, c("Trial_Arm", "Simulation")], mean), 1, quantile, 0.975))
-
-
 
 # Secondary 3
 
@@ -1339,7 +1281,6 @@ secondary.analyses$no3$var.diff.ratio.community.to.team <-
 # Calculate the 95% CI from the bootstrapped predicted coverages
 secondary.analyses$no3$var.diff.ratio.community.to.team.ci <- 
   t(apply(apply(pred.cov.by.survey.and.arm, 2, var.diff.ratio, pred.tab$Trial_Arm), 1, quantile, c(0.025, 0.975)))
-
 round(cbind(Estimate = secondary.analyses$no3$var.diff.ratio.community.to.team,
             secondary.analyses$no3$var.diff.ratio.community.to.team.ci), 2)
 
@@ -1372,7 +1313,7 @@ secondary.analyses$no4$formula <-
 
 # Fit the model using brm
 
-# set random seed using this URL:
+# Set random seed using this URL:
 # https://www.random.org/integers/?num=1&min=0&max=1000000000&col=1&base=10&format=html&rnd=new
 # Here are your random numbers: 517169365
 # Timestamp: 2024-05-01 10:10:13 UTC
@@ -1388,11 +1329,13 @@ secondary.analyses$no4$full.model <-
       cores = detectCores(),
       seed = secondary.analyses$no4$rng.seed)
 
-# Check visually that the chains look healthy
-#plot(secondary.analyses$no4$full.model)
 
-# More formal model diagnostics, optionsally
+# Model diagnostics, optionally
 if(FALSE) {
+  
+  # Check visually that the chains look healthy, an informal check
+  plot(secondary.analyses$no4$full.model)
+  
   # PPC using DHARMa
   model.check <- 
     createDHARMa(
@@ -1417,15 +1360,15 @@ hist(secondary.analyses$no4$mcmc[, "sd_ward__Intercept:Trial_ArmCommunity-based"
        secondary.analyses$no4$mcmc[, "sd_ward__Intercept:Trial_ArmTeam-based"]^2, xlim = c(0, 20),
      breaks = 400000)
 
+# Get median and 95% CrI from the posterior variance ratio
 secondary.analyses$no4$var.ratio.median <-
   median(secondary.analyses$no4$mcmc[, "sd_ward__Intercept:Trial_ArmCommunity-based"]^2 / 
            secondary.analyses$no4$mcmc[, "sd_ward__Intercept:Trial_ArmTeam-based"]^2)
-
 secondary.analyses$no4$var.ratio.ci95 <-
   HPDinterval(secondary.analyses$no4$mcmc[, "sd_ward__Intercept:Trial_ArmCommunity-based"]^2 / 
                 secondary.analyses$no4$mcmc[, "sd_ward__Intercept:Trial_ArmTeam-based"]^2)
 
-
+# Collect secondary analyses 3 and 4 in the secondary analyses list
 secondary.analyses$no3no4$Estimates <-
   structure(
     c(paste0(my.format(secondary.analyses$no3$var.diff.ratio.community.to.team["OR.Difference"], ndp = 2), " (",
@@ -1439,7 +1382,6 @@ secondary.analyses$no3no4$Estimates <-
       list(c("Secondary 3 (variation over time)", "Secondary 4 (variation over space)"),
            "Community-based:team-based ratio (95% CI)"))
 
-
 # Additional secondary analyses not specified in SAP:
 
 # Secondary 5
@@ -1451,10 +1393,8 @@ secondary.analyses$no3no4$Estimates <-
 
 # First need to ask: is this divergence in coverage consistent over the three years? 
 # This is an interaction between arm, visit and year. 
-
 secondary.analyses$no5$no.3way.ixn.model <- 
   update(primary.analysis$full.model, ~ . - Visit:Year:Trial_Arm)
-
 secondary.analyses$no5$likelihood.ratio.test.3way.ixn <-
   anova(primary.analysis$full.model, secondary.analyses$no5$no.3way.ixn.model)
 secondary.analyses$no5$p.value.3way.ixn <- secondary.analyses$no5$likelihood.ratio.test.3way.ixn[2, "Pr(>Chisq)"]
@@ -1487,7 +1427,6 @@ secondary.analyses$no5$full.model.noVisitXYearIxn <- NULL
 secondary.analyses$no5$estimate.ci.pval <- 
   c(confint(secondary.analyses$no5$final.model, method = "wald")["VisitV2:Trial_ArmCommunity-based", c(3, 1, 2)],
     p.value = as.vector(secondary.analyses$no5$p.value.two2way.ixn["Visit:Trial_Arm"]))
-
 secondary.analyses$no5$effect.estimates <-
   cbind(InteractionOR = paste0(my.format(exp(secondary.analyses$no5$estimate.ci.pval[1:3] * z), ndp = 2), 
                                c(" (", ", ", ")"), collapse = ""),
@@ -1521,7 +1460,7 @@ A <- X[X[, "VisitV2"] == 1, ] - X[X[, "VisitV2"] == 0, ]
 # as we know from the interaction test done above:
 secondary.analyses$no5$p.value.two2way.ixn["Visit:Trial_Arm"]
 
-# therefore calculate the two log ORs, ORs, and p-values
+# Therefore calculate the two log ORs, ORs, and p-values
 secondary.analyses$no6$effect.data <- data.frame(Trial_Arm = gsub("Y1-V2-", "", rownames(A)))
 rownames(secondary.analyses$no6$effect.data) <- rownames(A)
 secondary.analyses$no6$effect.data$V2V1.logodds.ratio <- 
@@ -1537,7 +1476,6 @@ secondary.analyses$no6$effect.data$V2V1.logodds.ratio.ci.lo <-
 secondary.analyses$no6$effect.data$V2V1.logodds.ratio.ci.hi <- 
   secondary.analyses$no6$effect.data$V2V1.logodds.ratio + qnorm(0.975) * 
   secondary.analyses$no6$effect.data$V2V1.logodds.ratio.se
-
 secondary.analyses$no6$effect.data$V2V1.odds.ratio <-
   exp(secondary.analyses$no6$effect.data$V2V1.logodds.ratio * z)
 secondary.analyses$no6$effect.data$V2V1.odds.ratio.ci.lo <-
@@ -1560,7 +1498,6 @@ mean.visit.month
 # However, the average V1 month was 5 months, so to extrapolate back to 
 # month 0, we need to "boost" the log odds ratio by multiplying it 
 # by 12/diff(mean.visit.month):
-
 secondary.analyses$no6$effect.data$V1.cov.for.V2.eq.thresh <-
   plogis(qlogis(cov.thresh) - 
            secondary.analyses$no6$effect.data$V2V1.logodds.ratio * 12/diff(mean.visit.month) * z)
@@ -1570,10 +1507,8 @@ secondary.analyses$no6$effect.data$V1.cov.for.V2.eq.thresh.ci.lo <-
 secondary.analyses$no6$effect.data$V1.cov.for.V2.eq.thresh.ci.hi <-
   plogis(qlogis(cov.thresh) - 
            secondary.analyses$no6$effect.data$V2V1.logodds.ratio.ci.lo * 12/diff(mean.visit.month) * z)
-
 secondary.analyses$no6$effect.data$Trial_Arm <- 
   factor(secondary.analyses$no6$effect.data$Trial_Arm, levels(dat$Trial_Arm))
-
 secondary.analyses$no6$effect.data$x <-
   (as.numeric(secondary.analyses$no6$effect.data$Trial_Arm) - 1.5)/20
 
@@ -1589,219 +1524,29 @@ secondary.analyses$no6$Table$`Start-of-year coverage for end-of-year coverage &g
   paste0(my.format(secondary.analyses$no6$Table$V1.cov.for.V2.eq.thresh, ndp = 2), " (",
          my.format(secondary.analyses$no6$Table$V1.cov.for.V2.eq.thresh.ci.lo, ndp = 2), ", ",
          my.format(secondary.analyses$no6$Table$V1.cov.for.V2.eq.thresh.ci.hi, ndp = 2), ")") 
-
 secondary.analyses$no6$Table <-
   secondary.analyses$no6$Table[, c("Trial_Arm", 
                                    "Visit effect OR (95% CI)", 
                                    "P-value", 
                                    "Start-of-year coverage for end-of-year coverage &ge; threshold")]
-
 secondary.analyses$no6$Table <- secondary.analyses$no6$Table[order(secondary.analyses$no6$Table$Trial_Arm), ]
 
 rm(A, X)
-
-### 1st additional analysis, not for the trial paper: simulations for economic analyses ----
-
-# Predict month-, year-, and ward-specific logit coverages with SE, for the economic analyses
-
-# use the final model for the secondary analyses
-
-# extract random effect variances 
-secondary.analyses$no2$re.var <- unlist(VarCorr(secondary.analyses$no2$final.model)$cond)
-
-# get predicted log odds (and SE) of coverage given 12 values of YearDay, Year, and Trial Arm
-logodds.pop.level <-
-  predict(secondary.analyses$no2$final.model, 
-          newdata = newdata.by.month.and.arm[, c("YearDay", "Year", "Trial_Arm")], 
-          re.form = ~ 0, type = "link", se.fit = TRUE)
-# there should be 72 predicted values (2 arms x 3 years x 12 months)
-length(table(logodds.pop.level$fit))
-
-# predict log odds of coverage per ward level (including random effects of ward and district, 
-# overall (ward, district), and round specific (ward.rnd, district.rnd) to the ward-levels
-newdata.by.month.and.arm$logodds.coverage <- 
-  logodds.pop.level$fit + 
-  rowSums(
-   sapply(which.re.to.include, function(re) {
-     ranef(secondary.analyses$no2$final.model)$cond[[re]][as.character(newdata.by.month.and.arm[, re]), "(Intercept)"]
-   }), na.rm = TRUE)
-
-# plot predicted log odds coverage across each year by ward and arm
-# the round random effects cause a break in the log odds coverage trend from 6 to 7 months:
-ggplot(data = newdata.by.month.and.arm, 
-       aes(x = YearDay, y = logodds.coverage, group = ward, colour = ward)) +
-  geom_line(show.legend = FALSE) +
-  facet_wrap(~ Trial_Arm + Year)
-
-# smooth this trend to be linear while keeping the same mean coverage
-tapply(newdata.by.month.and.arm$logodds.coverage, newdata.by.month.and.arm[, c("Trial_Arm", "Year")], mean)
-for(wy in unique(newdata.by.month.and.arm$ward.Year)) {
-  wydat <- newdata.by.month.and.arm[newdata.by.month.and.arm$ward.Year == wy, ] 
-  wysmooth <- fitted(lm(logodds.coverage ~ I(as.numeric(YearMonth)), data = wydat))
-  newdata.by.month.and.arm$logodds.coverage[newdata.by.month.and.arm$ward.Year == wy] <-
-    wysmooth
-}; rm(wy, wydat, wysmooth)
-tapply(newdata.by.month.and.arm$logodds.coverage, newdata.by.month.and.arm[, c("Trial_Arm", "Year")], mean)
-ggplot(data = newdata.by.month.and.arm, 
-       aes(x = YearDay, y = logodds.coverage, group = ward, colour = ward)) +
-  geom_line(show.legend = FALSE) +
-  facet_wrap(~ Trial_Arm + Year)
-
-# add standard error of predicted log odds of coverage, and calculate confidence limits
-newdata.by.month.and.arm$logodds.coverage.se <- logodds.pop.level$se.fit
-newdata.by.month.and.arm$logodds.coverage.ci.lo <- 
-  newdata.by.month.and.arm$logodds.coverage - qnorm(0.975) * newdata.by.month.and.arm$logodds.coverage.se
-newdata.by.month.and.arm$logodds.coverage.ci.hi <- 
-  newdata.by.month.and.arm$logodds.coverage + qnorm(0.975) * newdata.by.month.and.arm$logodds.coverage.se
-
-
-
-# convert log odds of coverage and its CI to coverage, adjusting for Jensen's inequality, which requires
-# first summing the random effect variances that we're averaging over (i.e. those not conditioned on above)
-V.ward.rnd <- 
-  sum(secondary.analyses$no2$re.var[!names(secondary.analyses$no2$re.var) %in% which.re.to.include])
-newdata.by.month.and.arm$pred.coverage <- 
-  jensen.logit.adjust(plogis(newdata.by.month.and.arm$logodds.coverage), 
-                      V = V.ward.rnd, 
-                      method = "zeger")
-newdata.by.month.and.arm$pred.coverage.ci.lo <- 
-  jensen.logit.adjust(plogis(newdata.by.month.and.arm$logodds.coverage.ci.lo), 
-                      V = V.ward.rnd, 
-                      method = "zeger")
-newdata.by.month.and.arm$pred.coverage.ci.hi <- 
-  jensen.logit.adjust(plogis(newdata.by.month.and.arm$logodds.coverage.ci.hi), 
-                      V = V.ward.rnd, 
-                      method = "zeger")
-
-# finally, calculate the probability of a ward having predicted coverage below 40%.
-# to do this, we'll assume that predicted log odds coverage has the following distribution:
-# N(mean = logodds.coverage, variance = logodds.coverage.se^2 + sum(condVar))
-# where sum(condVar) is the sum of the conditional variances of the random effect values that 
-# were summed to give the ward and round specific predictions, listed here:
-which.re.to.include
-
-# extract random effect values
-secondary.analyses$no2$reval <- as.data.frame(ranef(secondary.analyses$no2$final.model))
-
-# the way I'm coding this requires that no random effect level names are recycled, 
-# so that every random effect level name is unique. check this:
-stopifnot(nlevels(secondary.analyses$no2$reval$grp) == nrow(secondary.analyses$no2$reval))
-rownames(secondary.analyses$no2$reval) <- secondary.analyses$no2$reval$grp
-
-# calculate the conditional SD of the random effect values
-newdata.by.month.and.arm$re.condsd <-
-  sqrt(rowSums(sapply(which.re.to.include, function(re) {
-    condvar <- secondary.analyses$no2$reval[as.character(newdata.by.month.and.arm[, re]), "condsd"]^2
-    condvar[is.na(condvar)] <- mean(condvar, na.rm = TRUE)
-    condvar
-  })))
-
-# calculate the probability that coverage is below the threshold
-newdata.by.month.and.arm$p.lt.cov.thresh <-
-  pnorm(qlogis(jensen.logit.adjust(cov.thresh, V = V.ward.rnd, method = "zeger", inverse = TRUE)),
-        mean = newdata.by.month.and.arm$logodds.coverage, 
-        sd = sqrt(newdata.by.month.and.arm$logodds.coverage.se^2 + newdata.by.month.and.arm$re.condsd^2))
-
-# plot predicted log odds coverage across each year by ward and arm
-# the round random effects cause a break in the log odds coverage trend from 6 to 7 months:
-ggplot(data = newdata.by.month.and.arm, 
-       aes(x = YearDay, y = p.lt.cov.thresh, group = ward, colour = ward)) +
-  geom_line(show.legend = FALSE) +
-  facet_wrap(~ Trial_Arm + Year)
-
-
-# delete the conditional SD of the random effect values:
-newdata.by.month.and.arm$re.condsd <- NULL
-
-
-# Add labels and definitions re visit- and ward-specific logit coverages
-attr(newdata.by.month.and.arm$Year, "definition") <- "Year (Y1-Y3) of the trial year in which coverage was predicted."
-label(newdata.by.month.and.arm$YearMonth) <- "Trial month"
-attr(newdata.by.month.and.arm$YearMonth, "definition") <- 
-  "Month of the trial year for which coverage was predicted (1=Nov, ..., 12=Oct)" 
-label(newdata.by.month.and.arm$YearDay) <- "Day of trial year"
-attr(newdata.by.month.and.arm$YearDay, "definition") <- 
-  paste("The day (1-365) of the trial year at which coverage was predicted. There are 12 values of YearDay,",
-        "representing the midpoints of the 12 months in the annual trial cycle (Nov-Oct). These are not calendar months, but",
-        "rather are 12 dates equally spaced across the trial year.")
-label(newdata.by.month.and.arm$Visit) <- "Survey visit"
-attr(newdata.by.month.and.arm$Visit, "definition") <- 
-  paste0("Survey data was collected at two time points during the trial year, ", 
-         paste(levels(primary.analysis$analysis.data$Visit), collapse = " & "), ".")
-attr(newdata.by.month.and.arm$ward, "definition") <- 
-  paste("The name of the ward in which coverage was predicted. The first initial of the district name is", 
-        "appended to the ward name to create a unique ward identifier." )
-attr(newdata.by.month.and.arm$district, "definition") <- 
-  "The name of the district in which coverage was predicted."
-label(newdata.by.month.and.arm$logodds.coverage) <- "Log odds coverage"
-attr(newdata.by.month.and.arm$logodds.coverage, "definition") <- 
-  paste("Log odds of coverage predicted from the secondary analysis 2 GLMM,",
-        "conditioned on ward, ward-visit, district and district-visit random effects,",
-        "and averaged over household-visit, subvillage and subvillage-visit random effects")
-label(newdata.by.month.and.arm$logodds.coverage.se) <- "Log odds coverage standard error"
-label(newdata.by.month.and.arm$logodds.coverage.ci.lo) <- "Lower 95% confidence limit for log odds of coverage"
-label(newdata.by.month.and.arm$logodds.coverage.ci.hi) <- "Upper 95% confidence limit for log odds of coverage"
-label(newdata.by.month.and.arm$pred.coverage) <- "Model-predicted coverage"
-attr(newdata.by.month.and.arm$pred.coverage, "definition") <- 
-  paste("Bias due to Jensens's inequality was adjusted for using Zeger's approximate method:",
-        "inverse_logit(Beta / sqrt(1 + ((16 * sqrt(3))/(15 * pi))^2 * V)),",
-        "where Beta is log odds of coverage and V is the sum of the random effect variances",
-        "being averaged over, V =", V.ward.rnd)
-label(newdata.by.month.and.arm$pred.coverage.ci.lo) <- "Lower 95% confidence limit for model-predicted coverage"
-attr(newdata.by.month.and.arm$pred.coverage.ci.lo, "definition") <- attr(newdata.by.month.and.arm$pred.coverage, "definition")
-label(newdata.by.month.and.arm$pred.coverage.ci.hi) <- "Upper 95% confidence limit for model-predicted coverage"
-attr(newdata.by.month.and.arm$pred.coverage.ci.hi, "definition") <- attr(newdata.by.month.and.arm$pred.coverage, "definition")
-label(newdata.by.month.and.arm$p.lt.cov.thresh) <- paste0("P(coverage < ", 100 * cov.thresh, "%)")
-attr(newdata.by.month.and.arm$p.lt.cov.thresh, "definition") <- attr(newdata.by.month.and.arm$pred.coverage, "definition")
-
-
-# Copy missing labels from wards.rnd
-for(n in intersect(names(newdata.by.month.and.arm), names(wards.rnd))) {
-  if(label(newdata.by.month.and.arm[, n]) == "") label(newdata.by.month.and.arm[, n]) <- label(wards.rnd[, n])
-}
-label(newdata.by.month.and.arm)
-
-# Write visit- and ward-specific logit coverages to CSV file
-newdata.by.month.and.arm.export <- 
-  newdata.by.month.and.arm[, c("Year", "YearMonth", "YearDay", "Visit", "ward", "district", "Trial_Arm",
-                               "logodds.coverage", "logodds.coverage.se", "logodds.coverage.ci.lo", "logodds.coverage.ci.hi", 
-                               "pred.coverage", "pred.coverage.ci.lo", "pred.coverage.ci.hi", "p.lt.cov.thresh")]
-write.csv(newdata.by.month.and.arm.export, file = paste0("data/ward_month_coverages-", prog.name, "-", Sys.Date(), ".csv"), 
-          row.names = FALSE)
-# Write data dictionary for newdata.by.month.and.arm.export to CSV file
-write.csv(
-  t(sapply(names(newdata.by.month.and.arm.export), function(x) {
-    definition <- attr(newdata.by.month.and.arm.export[, x], "definition")
-    c(variable = x, 
-      label = label(newdata.by.month.and.arm.export[, x]), 
-      definition = ifelse(is.null(definition), "", definition))
-  })),
-  file = paste0("data/ward_month_coverages_datadictionary-", prog.name, "-", Sys.Date(), ".csv"), 
-  row.names = FALSE)
-
-
-### 2nd additional analysis not for the trial paper: simulations for Elaine's model ----
-
-# The aim is to produce similar month-by-month predicted coverage as above, except
-# that 
-
-
-
 
 
 ## Output tables and figures ----
 
 print("Outputting report")
 
-# initialise table numbering
+# Initialise table numbering
 
 tabnum <- 1
 
-# initialise figure numbering
+# Initialise figure numbering
 
 fignum <- 2 # (Fig 1 is not produced by this script)
 
-# make header and footer file
+# Make header and footer file
 
 cat(
   "<html>",
@@ -1969,7 +1714,6 @@ rm(Table)
 
 
 # Secondary analysis 5
-
 Table <- 
   list(tab.heads = cbindMatrix(rbind(colnames(secondary.analyses$no5$effect.estimates))),
        tab.rows = cbindMatrix(secondary.analyses$no5$effect.estimates))
@@ -1991,7 +1735,6 @@ rm(Table)
 # Secondary analysis 6
 
 # Table showing V2:V1 odds ratios and coverage required at V1 to keep coverage over threshold at V2
-
 Table <- 
   list(tab.heads = cbindMatrix(rbind(colnames(secondary.analyses$no6$Table))),
        tab.rows = cbindMatrix(as.matrix(secondary.analyses$no6$Table)))
@@ -2009,7 +1752,7 @@ tabnum<-tabnum+1; rm(Table)
 
 #### Supplementary tables ----
 
-# re-initialise table numbering
+# Re-initialise table numbering
 tabnum <- 1
 
 # Estimates from full model
@@ -2152,7 +1895,7 @@ cat(
 fignum<-fignum+1
 
 
-# violin plot showing probability distribution of coverage by trial month for each arm
+# Violin plot showing probability distribution of coverage by trial month for each arm
 coverage.dist$YearMonthArm <- 
   factor(paste(coverage.dist$YearMonth, coverage.dist$Trial_Arm),
          paste(rep(levels(coverage.dist$YearMonth), nlevels(coverage.dist$Trial_Arm)), 
@@ -2193,7 +1936,7 @@ cat(
 fignum<-fignum+1
 
 
-# figure of odds ratios estimates by survey time point
+# Figure of odds ratios estimates by survey time point
 height <- 1200
 width <- 1700
 png(fig.name(fignum, figures.directory = figures.directory, fmt = ".png"), 
@@ -2230,7 +1973,7 @@ fignum<-fignum+1
 
 #### Supplementary figures ----
 
-# re-initialise figure numbering
+# Re-initialise figure numbering
 fignum <- 1
 
 # Figures of raw coverage estimates by survey time point and ward, one per arm
@@ -2267,7 +2010,7 @@ for(arm in names(arm.colours)) {
 }
 
 
-# close html file
+# Close html file
 cat("</div>","</body>","</html>",file=file.out,sep="\n",append=T)
 
 file.rename(file.out, paste0(file.out, ".html"))
@@ -2276,7 +2019,7 @@ Sys.sleep(10)
 file.rename(paste0(file.out, ".html"), file.out)
 system(paste("open", file.out))
 
-# report run time
+# Report run time
 finish.time <- Sys.time() 
 finish.time - start.time
 
