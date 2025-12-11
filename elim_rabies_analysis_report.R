@@ -18,7 +18,7 @@ start.time <- Sys.time()
 
 # Is this the final run, with larger and slower bootstrap and MCMC samples,
 # and with RNG seeds set?
-final.run <- FALSE
+final.run <- TRUE
 
 
 # Define vaccination coverage
