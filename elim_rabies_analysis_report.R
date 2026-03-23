@@ -29,7 +29,7 @@ vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4
 # Make simulations reproducible by setting RNG seed?
 set.rng.seed <- final.run
 
-# Iteration multiplier (slower and more accurate results)
+# Iteration multiplier (higher values give slower and more accurate results)
 iter.mult <- ifelse(final.run, 10, 0.1)
 
 # Set minimum acceptable coverage threshold
@@ -829,10 +829,10 @@ secondary.analyses$no1$intervention.p.value <-
 # 2.	
 # The full model will be used to compare the likelihood of coverage dipping below 
 # the coverage threshold in each arm by implementing the following plan:
-#  a.	Use parametric bootstrapping from the fitted full model to generate 1000 samples
+#  a.	Use parametric bootstrapping from the fitted full model to generate nsim samples
 #      from the sampling distribution of the model parameters, capturing uncertainty in 
 #      the model parameter estimates (fixed effects and random effect variances).
-#  b.	For each of the 1000 sets of parameters, simulate a new set of wards with 
+#  b.	For each of the nsim sets of parameters, simulate a new set of wards with 
 #      ward-level coverage, including random effect variation, giving the distribution
 #      of predicted coverage in each arm for a random ward, taking account of parameter 
 #      estimation uncertainty and random effect variation.
@@ -1439,7 +1439,7 @@ secondary.analyses$no5$p.value.3way.ixn
 # Having dropped the three way interaction, we asked if the visit x year interaction 
 # was significant. We know from secondary analysis 5 above that it isn't:
 secondary.analyses$no5$p.value.three2way.ixn
-# but having dropped it the remaing 2-way interactions are significant:
+# but having dropped it the remaining 2-way interactions are significant:
 secondary.analyses$no5$p.value.two2way.ixn
 
 # Both interactions are significant, so the final secondary #6 model has two interactions
