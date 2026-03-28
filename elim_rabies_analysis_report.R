@@ -20,7 +20,6 @@ start.time <- Sys.time()
 # and with RNG seeds set?
 final.run <- TRUE
 
-
 # Define vaccination coverage
 # Use vaccinated_M3 as the primary outcome - more reliable, although also lots of missing data
 # but include analysis of an alternative definition of coverage, vaccinated_M4,
@@ -61,7 +60,7 @@ subtitle <-
 report.purpose<-"Analysis"
 brief.purpose<-"analysis"
 draft.or.final<-ifelse(final.run, "Final", "Draft")
-report.version<-"04"
+report.version<-"1.0"
 report.status<-paste(draft.or.final,"Report Version",report.version)    
 author<-"Paul Johnson"
 
@@ -78,7 +77,9 @@ prog.file<-paste0(prog.directory,prog.name,".R")
 
 
 # Set output file for tables
-file.out.directory<-paste0(prog.directory,brief.purpose,"_report")
+file.out.directory <- 
+  ifelse(vaccination.definition == "Vaccinated_M3", paste0(prog.directory,brief.purpose,"_report"), 
+         paste0(prog.directory,brief.purpose,"_report_alt_outcome_definition"))
 file.out.name<-paste0(prog.name,".doc")
 file.out<-paste(file.out.directory,file.out.name,sep="/")
 
@@ -103,7 +104,7 @@ source(paste0(prog.directory,"functions/elim_rabies_functions.R"))
 # Load packages
 need.packages <-
   c("lubridate", "foreign", "Hmisc", "gdata", "lme4", "glmmTMB", "DHARMa", "ggplot2", "sjPlot",
-    "parallel", "forcats", "brms", "bayesplot", "coda", "see", "vioplot")
+    "parallel", "forcats", "brms", "bayesplot", "coda", "see", "vioplot", "sf", "spdep")
 sapply(need.packages,install.load)
 
 
@@ -137,7 +138,7 @@ vax$Trial_Arm <- factor(vax$Trial_Arm, c("Pulse", "Continuous"), names(arm.colou
 vax$ward <- factor(paste(vax$ward, substr(vax$district, 1, 1), sep = "-"))
 
 # Format vax dates
-vax$date.vaccinated <- as.Date(vax$date.vaccinated)
+vax$date.vaccinated <- as.Date(vax$date.vaccinated, format = "%d/%m/%Y")
 vax$day.vaccinated <- as.numeric(vax$date.vaccinated - min(vax$date.vaccinated)) + 1
 
 
@@ -218,7 +219,7 @@ dat$month.vaccinated <-
 label(dat$month.vaccinated) <- "Month vaccinated"
 
 # Precise dates of assessments
-dat$date.added <- as.Date(dat$date.added)
+dat$date.added <- as.Date(dat$date.added, format = "%d/%m/%Y")
 
 # Create a variable for the day of the trial year on which each dog was surveyed
 for(y in levels(dat$Year)) {
@@ -301,7 +302,7 @@ ward.rnd.tab <- ward.rnd.tab[-grep("-Y3-V2", names(ward.rnd.tab))]
 ward.rnd.eq0 <- sort(names(ward.rnd.tab)[ward.rnd.tab == 0])
 ward.rnd.lt30 <- sort(names(ward.rnd.tab)[ward.rnd.tab < 30 & ward.rnd.tab > 0])
 ward.rnd.gt60 <- sort(names(ward.rnd.tab)[ward.rnd.tab > 60])
-unique(dat[dat$ward %in% substr(ward.rnd.eq0, 1, nchar(ward.rnd.eq0) - 6), c("Village", "ward", "latitude")])
+#unique(dat[dat$ward %in% substr(ward.rnd.eq0, 1, nchar(ward.rnd.eq0) - 6), c("Village", "ward", "latitude")])
 sort(table(dat$ward[dat$ward.rnd %in% ward.rnd.lt30]))
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.lt30 & dat$LandUse == "Rural", c("ward", "YearVisit")])))
 table(unique(droplevels(dat[dat$ward.rnd %in% ward.rnd.lt30 & dat$LandUse == "Semi-Urban", c("ward", "YearVisit")])))
@@ -466,6 +467,9 @@ wards$SV_V_Distance <- tapply(dat$SV_V_Distance, dat$ward, mean, na.rm = TRUE)[r
 label(wards$SV_V_Distance) <- "Mean subvillage-village distance (km)"
 wards$Completeness <- 100 * rowSums(table(dat$ward, dat$YearVisit) > 0)[rownames(wards)] / nlevels(dat$YearVisit)
 label(wards$Completeness) <- "Survey completeness (%)"
+wards$lat <- tapply(dat$SV_latitude, dat$ward, mean, na.rm = TRUE)[rownames(wards)]
+wards$lon <- tapply(dat$SV_longitude, dat$ward, mean, na.rm = TRUE)[rownames(wards)]
+
 
 # Compare raw coverage between arms, by land use category
 tapply(wards$Coverage, list(wards$LandUse, wards$Trial_Arm), mean)
@@ -782,6 +786,7 @@ pred.tab$Coverage.simple[pred.tab$Trial_Arm == "Team-based"] <-
   covtab["Team-based", ]
 pred.tab$Coverage.simple[pred.tab$Trial_Arm == "Community-based"] <- 
   covtab["Community-based", ]
+
 
 ### Secondary efficacy analyses ----
 
@@ -1116,11 +1121,11 @@ primary.analysis$effect.estimates$`Odds ratio (95% CI)` <-
   paste0(my.format(primary.analysis$effect.estimates$InterventionOR, ndp = 2), " (",
          my.format(primary.analysis$effect.estimates$InterventionOR.ci.lo, ndp = 2), ", ",
          my.format(primary.analysis$effect.estimates$InterventionOR.ci.hi, ndp = 2), ")") 
-primary.analysis$effect.estimates$`P-value` <- 
+primary.analysis$effect.estimates$`<i>p</i>-value` <- 
   p.format(primary.analysis$effect.estimates$Intervention.p.value)
 primary.analysis$effect.estimates$`Year-visit` <- primary.analysis$effect.estimates$YearVisit
 primary.analysis$effect.estimates <- 
-  primary.analysis$effect.estimates[, c("Year-visit", "Team", "Community", "Odds ratio (95% CI)", "P-value")]
+  primary.analysis$effect.estimates[, c("Year-visit", "Team", "Community", "Odds ratio (95% CI)", "<i>p</i>-value")]
 
 # Add the coverage estimates to the primary analysis list
 primary.analysis$predicted.coverage <- pred.tab
@@ -1152,7 +1157,7 @@ primary.analysis$effect.estimates.allyears <-
   rbind(c(`Year-visit` = "All years", 
           mean.coverage.ci95,
           `Odds ratio (95% CI)` = boot.odds.ratio.ci95,
-          `P-value` = boot.log.odds.ratio.p.value))
+          `<i>p</i>-value` = boot.log.odds.ratio.p.value))
 
 # Secondary 2c. Calculate the proportion of wards at each time point with coverage below threshold for each arm.
 
@@ -1426,7 +1431,7 @@ secondary.analyses$no5$estimate.ci.pval <-
 secondary.analyses$no5$effect.estimates <-
   cbind(InteractionOR = paste0(my.format(exp(secondary.analyses$no5$estimate.ci.pval[1:3] * z), ndp = 2), 
                                c(" (", ", ", ")"), collapse = ""),
-        `P-value` = p.format(secondary.analyses$no5$estimate.ci.pval["p.value"]))
+        `<i>p</i>-value` = p.format(secondary.analyses$no5$estimate.ci.pval["p.value"]))
 
 # Secondary 6
 
@@ -1514,7 +1519,7 @@ secondary.analyses$no6$Table$`Visit effect OR (95% CI)` <-
   paste0(my.format(secondary.analyses$no6$Table$V2V1.odds.ratio, ndp = 2), " (",
          my.format(secondary.analyses$no6$Table$V2V1.odds.ratio.ci.lo, ndp = 2), ", ",
          my.format(secondary.analyses$no6$Table$V2V1.odds.ratio.ci.hi, ndp = 2), ")") 
-secondary.analyses$no6$Table$`P-value` <- 
+secondary.analyses$no6$Table$`<i>p</i>-value` <- 
   p.format(secondary.analyses$no6$Table$V2V1.logodds.ratio.p.value)
 secondary.analyses$no6$Table$`Start-of-year coverage for end-of-year coverage &ge; threshold` <-
   paste0(my.format(secondary.analyses$no6$Table$V1.cov.for.V2.eq.thresh, ndp = 2), " (",
@@ -1523,11 +1528,51 @@ secondary.analyses$no6$Table$`Start-of-year coverage for end-of-year coverage &g
 secondary.analyses$no6$Table <-
   secondary.analyses$no6$Table[, c("Trial_Arm", 
                                    "Visit effect OR (95% CI)", 
-                                   "P-value", 
+                                   "<i>p</i>-value", 
                                    "Start-of-year coverage for end-of-year coverage &ge; threshold")]
 secondary.analyses$no6$Table <- secondary.analyses$no6$Table[order(secondary.analyses$no6$Table$Trial_Arm), ]
 
 rm(A, X)
+
+
+# Additional analyses following peer review
+
+# Check the sensitivity of the results to adjusting for land use, noting that 
+# the stratified randomisation resulted in there being a higher proportion of 
+# urban wards in the team-based arm than in the community-based arm.
+table(wards$LandUse, wards$Trial_Arm)
+secondary.analyses$no7$final.model <- 
+  update(primary.analysis$full.model, ~ . + LandUse)
+
+# Test land use effect
+secondary.analyses$no7$likelihood.ratio.test <-
+  anova(primary.analysis$full.model, secondary.analyses$no7$final.model)
+secondary.analyses$no7$likelihood.ratio.test
+
+# Land use effect analysis p-value
+secondary.analyses$no7$landuse.p.value <- 
+  secondary.analyses$no7$likelihood.ratio.test[2, "Pr(>Chisq)"]
+
+# Test for spatial autocorrelation between wards in the residuals of the primary
+# analysis model by creating a spatial version of the wards data set with ward 
+# coordinates caluclated as mean sub-village coordinates, and mean residuals,
+# then calculating and testing Moran's I across k = 1 to 10 nearest neighbours.
+# The wide range of nearest neighbours tests across a range of scales, 
+# from very local (k = 1) to larger scale (k = 10)
+wards.spatial <- st_as_sf(wards, coords = c("lon","lat"), crs = 4326)
+wards.spatial$mean.resid <- 
+  tapply(resid(primary.analysis$full.model),
+         primary.analysis$analysis.data$ward, mean, na.rm = TRUE)[rownames(wards)]
+moran.stats <-
+  t(sapply(1:10, function(k) {
+    knn <- knearneigh(st_coordinates(wards.spatial), k = k, longlat = TRUE)
+    nb <- knn2nb(knn)
+    out <- moran.test(wards.spatial$mean.resid, nb2listw(nb, style = "W"))
+    c(k = k, i = out$statistic, p = out$p.value)
+  }))
+colnames(moran.stats) <- c("kNN", "Moran's <i>I</i>", "<i>p</i>-value")
+moran.stats[, 2] <-  round(moran.stats[, 2], 2)
+moran.stats[, "<i>p</i>-value"] <-  p.format(moran.stats[, "<i>p</i>-value"])
 
 
 ## Output tables and figures ----
@@ -1642,8 +1687,8 @@ tab.heads <-
                         cbindTable(colnames(primary.analysis$effect.estimates)[2], colnames(primary.analysis$effect.estimates)[3])),
              colnames(primary.analysis$effect.estimates)[4],
              colnames(primary.analysis$effect.estimates)[5],
-             "P-value<br/>(primary analysis)", 
-             "P-value<br/>(secondary analysis 1)")
+             "<i>p</i>-value<br/>(primary analysis)", 
+             "<i>p</i>-value<br/>(secondary analysis 1)")
 Table <- 
   list(tab.heads = tab.heads,
        tab.rows =
@@ -1657,10 +1702,10 @@ Table <-
 
 output.html.table(Table,
                   paste("Primary analysis and secondary analysis 1. Coverage and intervention odds ratio estimates (95% CI) at each survey",
-                        "estimated from the GLMM reported in the previous table. P-values at each survey are from likelihood ratio tests of the",
+                        "estimated from the GLMM reported in the previous table. <i>p</i>-values at each survey are from likelihood ratio tests of the",
                         "primary analysis null hypothesis of no intervention effect at any of the six surveys and secondary",
                         "analysis 1 null hypothesis of no intervention effect at any of the three visit 2 surveys.",
-                        "Mean coverage (95% CI), odds ratio (95% CI) and P-value across all years were estimated from",
+                        "Mean coverage (95% CI), odds ratio (95% CI) and <i>p</i>-value across all years were estimated from",
                         secondary.analyses$no2$nsim, "parametric bootstrap samples.",
                         "Population: all dogs with primary outcome data."),
                   table.number=tabnum,file=file.out,
@@ -1716,10 +1761,10 @@ Table <-
 #ViewTable.HTML(Table)
 output.html.table(Table,
                   paste0("Secondary analysis 5. Estimate (95% CI) V2:V1 ratio of Community-based:Team-based odds ratios. ", 
-                         "This ratio represents the interaction between trial arm and visit; the p-value tests ",
+                         "This ratio represents the interaction between trial arm and visit; the <i>p</i>-value tests ",
                          "the null hypothesis of equal intervention effect between visit 1 and visit 2. ",
                          "This interaction effect did not differ between the three years ",
-                         "(trial arm &times; visit &times; year interaction p-value = ",
+                         "(trial arm &times; visit &times; year interaction <i>p</i>-value = ",
                          p.format(secondary.analyses$no5$p.value.3way.ixn), "). ",
                          "Population: all dogs with primary outcome data."),
                   table.number="for main text",file=file.out,
@@ -1760,8 +1805,11 @@ Table <-
             title = paste0("<b>Table S", tabnum, 
                            "</b>. Estimates of fixed effects (log odds and log odds ratios) and ",
                            "random effects (variances) from the GLMMs fitted for the primary analysis. ",
-                           "Numbers of observations, number of each random effect level, and marginal and conditional ",
+                           "Number of observations, number of each random effect level, and marginal and conditional ",
                            "R<sup>2</sup> are also presented. ", 
+                           "The null hypothesis of no intervention effect was rejected (",
+                           "&chi;<sup>2</sup>(", diff(primary.analysis$likelihood.ratio.test[, "Df"]),
+                           "), <i>p</i> ", gsub("<", "&lt; ", p.format(primary.analysis$intervention.p.value)), "). ",
                            "Population: all dogs with primary outcome data."),
             CSS = list(css.table = "font-size:9", 
                        css.caption = "+font-weight: normal"), 
@@ -1773,9 +1821,38 @@ for(page.element in c("page.style", "page.content", "page.complete", "knitr")) {
   Table[[page.element]] <- gsub("padding-top:0.1cm", "padding-top:0.01cm", Table[[page.element]])
 }
 cat(Table$knitr, file=file.out, sep="\n", append=T)
+cat('<p>&nbsp;</p>', file = file.out, sep="\n", append = TRUE)
+cat('<p>&nbsp;</p>', file = file.out, sep="\n", append = TRUE)
 tabnum<-tabnum+1; rm(Table)
 
 
+# Compare full primary analysis model with same model adjusted for land use category
+Table <- 
+  tab_model(primary.analysis$full.model, secondary.analyses$no7$final.model, 
+            transform = NULL, emph.p = FALSE, show.se = TRUE, show.icc = FALSE,
+            ci.hyphen = ", ",
+            dv.labels = c("Primary analysis full model", "Primary analysis full model adjusted for land use"),
+            title = paste0("<b>Table S", tabnum, 
+                           "</b>. Estimates of fixed effects (log odds and log odds ratios) and ",
+                           "random effects (variances) from the primary analysis GLMM and the same model adjusted for land use category. ",
+                           "Number of observations, number of each random effect level, and marginal and conditional ",
+                           "R<sup>2</sup> are also presented. ", 
+                           "Adding land use category to the primary analysis model did not significantly improve fit (",
+                           "&chi;<sup>2</sup>(", diff(secondary.analyses$no7$likelihood.ratio.test[, "Df"]),
+                           "), <i>p</i> = ", p.format(secondary.analyses$no7$landuse.p.value), "). ",
+                           "Population: all dogs with primary outcome data."),
+            CSS = list(css.table = "font-size:9", 
+                       css.caption = "+font-weight: normal"), 
+            show.intercept = TRUE)
+# reduce table cell padding
+for(page.element in c("page.style", "page.content", "page.complete", "knitr")) {
+  Table[[page.element]] <- gsub("padding:0.2cm", "padding:0.05cm", Table[[page.element]])
+  Table[[page.element]] <- gsub("padding-bottom:0.1cm", "padding-bottom:0.01cm", Table[[page.element]])
+  Table[[page.element]] <- gsub("padding-top:0.1cm", "padding-top:0.01cm", Table[[page.element]])
+}
+cat(Table$knitr, file=file.out, sep="\n", append=T)
+cat('<p>&nbsp;</p>', file = file.out, sep="\n", append = TRUE)
+tabnum<-tabnum+1; rm(Table)
 
 # Relevant characteristics of dogs, by trial arm
 t1.vars <- c("age.years", "Sex", "YearVisit",
@@ -1790,41 +1867,57 @@ Table<-
 output.html.table(Table,
                   paste("Characteristics of surveyed dogs, overall and by trial arm. Population: all dogs."),
                   table.number=paste0("S", tabnum),file=file.out,
-                  fullWidth=TRUE,new.page.after=TRUE,font.size=9)
+                  fullWidth=TRUE, new.page.after=TRUE, font.size=9)
+tabnum<-tabnum+1; rm(Table)
+
+# Moran's I test for spatial autocorrelation
+tab.heads <-
+  cbindMatrix(colnames(moran.stats))
+Table <- 
+  list(tab.heads = tab.heads,
+       tab.rows = cbindMatrix(moran.stats))
+#ViewTable.HTML(Table)
+output.html.table(Table,
+                  paste("Moran's test for spatial autocorrelation in the residuals of the primary analysis full model,",
+                        "applied at a range of spatial scales defined by the number of nearest neighbours (kNN)."),
+                  table.number=paste0("S", tabnum),file=file.out,
+                  fullWidth=TRUE, new.page.after=TRUE, font.size=9)
 tabnum<-tabnum+1; rm(Table)
 
 
 ### Figures ----
 
 # Plot of the number of vaccinations and the number of dogs surveyed per day, by arm
-height <- 1800
-width <- 2400
-png(fig.name(fignum, figures.directory = figures.directory, fmt = ".png"), 
+height <- 1300
+width <- 1600
+tiff(fig.name(fignum, figures.directory = figures.directory, fmt = ".tiff"), 
     height = height, width = width, units = "px",
     res = 300)
-old.par <- par(mar = c(5.1, 4.1, 2.1, 4.1), mfrow = c(1, 1))
+old.par <- par(mar = c(5.1, 4.1, 2.1, 4.1), mfrow = c(1, 1), mgp = c(1.8, 0.5, 0))
 vax$day.vaccinated.fac <- factor(vax$day.vaccinated, min(vax$day.vaccinated):max(vax$day.vaccinated))
 vax.tab <- table(vax$Trial_Arm, vax$day.vaccinated.fac)
 vax.ymax <- 3500
 vax.plot.alpha <- 0.8
 vax.plot.lwd <- 1.5
+vax.cex <- 0.7
 plot(colnames(vax.tab), vax.tab["Community-based", ], type = "l", 
      col = alpha(arm.colours["Community-based"], vax.plot.alpha), lwd = vax.plot.lwd,
      ylab = "N vaccinations (lower series)", xlab = "Month",
      axes = FALSE,
      ylim = c(0, vax.ymax),
-     xlim = range(c(dat$day.added, vax$day.vaccinated)))
+     xlim = range(c(dat$day.added, vax$day.vaccinated)), cex.lab = vax.cex)
 lines(colnames(vax.tab), vax.tab["Team-based", ], col = alpha(arm.colours["Team-based"], vax.plot.alpha), 
       lwd = vax.plot.lwd)
 legend("right", legend = names(arm.colours), lwd = vax.plot.lwd, 
-       col = alpha(arm.colours, vax.plot.alpha), bty = "n")
+       col = alpha(arm.colours, vax.plot.alpha), bty = "n", cex = vax.cex)
 vax.plot.x.lab <- pretty(as.numeric(colnames(vax.tab)) * 12 /365, n = 10, bty = "n")
 vax.plot.x.at <- vax.plot.x.lab * 365 / 12
-axis(1, at = vax.plot.x.at, labels = vax.plot.x.lab)
-axis(2)
+axis(1, at = vax.plot.x.at, labels = vax.plot.x.lab, cex.axis = vax.cex)
+axis(2, cex.axis = vax.cex)
 axis(3, at = mean.visit.dates - min(vax$date.vaccinated) + 1,
-     labels = rep(c(expression("V"[1]), expression("V"[2])), 3))
-axis(4, at = pretty(c(0, vax.ymax)), labels = (vax.ymax - pretty(c(0, vax.ymax)))/10)
+     labels = rep(c(expression("V"[1]), expression("V"[2])), 3), cex.axis = vax.cex)
+axis(4, at = pretty(c(0, vax.ymax)), labels = (vax.ymax - pretty(c(0, vax.ymax)))/10,
+     cex.axis = vax.cex)
 box()
 vax$month.vaccinated <- substr(vax$date.vaccinated, 1, 7)
 table(vax$month.vaccinated, vax$Trial_Arm)
@@ -1834,17 +1927,17 @@ dat$day.added.fac <- factor(dat$day.added, min(dat$day.added):max(dat$day.added)
 
 survey.tab <- table(dat$Trial_Arm, dat$day.added.fac)
 lines(colnames(survey.tab), vax.ymax - 10 * survey.tab["Community-based", ] - 8, 
-      col = alpha(arm.colours["Community-based"], vax.plot.alpha/2), lwd = vax.plot.lwd)
+      col = alpha(arm.colours["Community-based"], vax.plot.alpha/1.5), lwd = vax.plot.lwd)
 lines(colnames(survey.tab), vax.ymax - 10 * survey.tab["Team-based", ], 
-      col = alpha(arm.colours["Team-based"], vax.plot.alpha/2), lwd = vax.plot.lwd)
+      col = alpha(arm.colours["Team-based"], vax.plot.alpha/1.5), lwd = vax.plot.lwd)
 
-mtext("N dogs surveyed (upper series)", side = 4, line = 3, cex = 1)
+mtext("N dogs surveyed (upper series)", side = 4, line = 2, cex = vax.cex)
 par(old.par)
 dev.off()
 
 cat(
   "<p align='justify'>",     
-  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".png")),
+  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".tiff")),
          "' height=", height/5, " width=", width/5, " >\n"),
   paste0(
     "<br><br><b>Figure ",fignum,
@@ -1855,13 +1948,13 @@ cat(
 fignum<-fignum+1
 
 
-# figure of coverage estimates by arm and survey time point
-height <- 1800
-width <- 2100
-png(fig.name(fignum, figures.directory = figures.directory, fmt = ".png"), 
+# Figure of coverage estimates by arm and survey time point
+height <- 1350
+width <- 1575
+tiff(fig.name(fignum, figures.directory = figures.directory, fmt = ".tiff"), 
     height = height, width = width, units = "px",
     res = 300)
-old.par<-par(mfrow=c(1,1))
+old.par<-par(mfrow = c(1, 1), mgp = c(1.8, 0.6, 0))
 estimate.ci.plot(x.term = "x", y.term = "Coverage", 
                  y.ci.lo = "Coverage.ci.lo", y.ci.hi = "Coverage.ci.hi", 
                  plotdata = pred.tab, xlab = "Visit", ylab = "Coverage \u00B1 95% CI", 
@@ -1871,7 +1964,7 @@ estimate.ci.plot(x.term = "x", y.term = "Coverage",
                  x.at = unique(round(pred.tab$x)), 
                  x.labels = sapply(sapply(add_brackets(levels(pred.tab$YearVisit)), 
                                           function(x) substitute(parse(text = a), list(a = x))), eval),
-                 cex = 1.5)
+                 cex = 1.2)
 lines(Coverage ~ x, data = pred.tab[pred.tab$Trial_Arm == "Team-based", ], type = "b", cex = 0)
 lines(Coverage ~ x, data = pred.tab[pred.tab$Trial_Arm == "Community-based", ], type = "b", cex = 0)
 legend("topleft", legend = levels(dat$Trial_Arm), pch = 20 + 1:nlevels(dat$Trial_Arm),
@@ -1881,7 +1974,7 @@ par(old.par)
 dev.off()
 cat(
   "<p align='justify'>",     
-  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".png")),
+  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".tiff")),
          "' height=", height/5, " width=", width/5, " >\n"),
   paste0(
     "<br><br><b>Figure ",fignum,
@@ -1896,12 +1989,12 @@ coverage.dist$YearMonthArm <-
   factor(paste(coverage.dist$YearMonth, coverage.dist$Trial_Arm),
          paste(rep(levels(coverage.dist$YearMonth), nlevels(coverage.dist$Trial_Arm)), 
                rep(levels(coverage.dist$Trial_Arm), each = nlevels(coverage.dist$YearMonth))))
-height <- 1300
-width <- 2400
-png(fig.name(fignum, figures.directory = figures.directory, fmt = ".png"), 
+height <- 1000
+width <- 2000
+tiff(fig.name(fignum, figures.directory = figures.directory, fmt = ".tiff"), 
     height = height, width = width, units = "px",
     res = 300)
-old.par<-par(mfrow=c(1,1))
+old.par<-par(mfrow = c(1, 1), mar = c(3.1, 3.1, 1.1, 1.1), mgp = c(1.8, 0.6, 0))
 vioplot(Coverage ~ YearMonthArm, data = coverage.dist, axes = FALSE,
         ylim = c(0, 1.05), 
         xlim = c(1.3, nlevels(coverage.dist$YearMonthArm) - 0.3),
@@ -1909,10 +2002,10 @@ vioplot(Coverage ~ YearMonthArm, data = coverage.dist, axes = FALSE,
         rectCol = "grey",
         lineCol = "grey",
         cex.axis = 0.001, xlab = "Trial Month") 
-axis(2)
+axis(2, cex.axis = 0.7)
 axis(1, at = 1:nlevels(coverage.dist$YearMonthArm), 
      labels = rep(levels(coverage.dist$YearMonth), nlevels(coverage.dist$Trial_Arm)),
-     cex.axis = 0.8)
+     cex.axis = 0.7)
 abline(h = cov.thresh, lty = 2)
 abline(v = 12.5)
 box()
@@ -1921,7 +2014,7 @@ par(old.par)
 dev.off()
 cat(
   "<p align='justify'>",     
-  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".png")),
+  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".tiff")),
          "' height=", height/5, " width=", width/5, " >\n"),
   paste0(
     "<br><br><b>Figure ",fignum,
@@ -1933,12 +2026,12 @@ fignum<-fignum+1
 
 
 # Figure of odds ratios estimates by survey time point
-height <- 1200
+height <- 1000
 width <- 1700
-png(fig.name(fignum, figures.directory = figures.directory, fmt = ".png"), 
+tiff(fig.name(fignum, figures.directory = figures.directory, fmt = ".tiff"), 
     height = height, width = width, units = "px",
     res = 300)
-old.par<-par(mfrow=c(1,1))
+old.par <- par(mfrow = c(1, 1), mar = c(3.1, 3.1, 1.1, 1.1), mgp = c(1.8, 0.6, 0))
 estimate.ci.plot(x.term = "x", y.term = "InterventionOR", 
                  y.ci.lo = "InterventionOR.ci.lo", y.ci.hi = "InterventionOR.ci.hi", 
                  plotdata = effect.data, xlab = "", 
@@ -1958,7 +2051,7 @@ par(old.par)
 dev.off()
 cat(
   "<p align='justify'>",     
-  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".png")),
+  paste0("<img src='",paste(fig.name(fignum, figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".tiff")),
          "' height=", height/5, " width=", width/5, " >\n"),
   paste0(
     "<br><br><b>Figure ",fignum,
@@ -1973,29 +2066,29 @@ fignum<-fignum+1
 fignum <- 1
 
 # Figures of raw coverage estimates by survey time point and ward, one per arm
-height <- 2500
-width <- 4000
+height <- 1000
+width <- 1600
 for(arm in names(arm.colours)) {
   print(arm.colours[arm])
-  png(fig.name(paste0("S", fignum), figures.directory = figures.directory, fmt = ".png"), 
+  tiff(fig.name(paste0("S", fignum), figures.directory = figures.directory, fmt = ".tiff"), 
       height = height, width = width, units = "px",
       res = 300)
   raw.cov.plot <-
     ggplot(data = wards.rnd.reduced[wards.rnd.reduced$Trial_Arm == arm, ], 
            aes(x = YearVisit, y = Coverage, group = ward, shape = Trial_Arm)) +
-    geom_point(aes(size = sqrt(I(N)/10)), color = arm.colours[arm], show.legend = FALSE) +
+    geom_point(aes(size = sqrt(I(N)/20)), color = arm.colours[arm], show.legend = FALSE) +
     geom_line(linewidth = 0.2) + 
     facet_wrap(~ district + ward.short) +
     xlab("") +
     guides(col = "none") + 
-    theme_bw() +
+    theme_bw(base_size = 4) +
     theme(axis.text.x = element_text(angle = 90)) 
   print(raw.cov.plot)
   dev.off()
   cat(
     "<p align='justify'>",     
-    paste0("<img src='",paste(fig.name(paste0("S", fignum), figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".png")),
-           "' height=", height/5, " width=", width/5, " >\n"),
+    paste0("<img src='",paste(fig.name(paste0("S", fignum), figures.directory = strsplit(figures.directory, "/")[[1]][2], fmt = ".tiff")),
+           "' height=", height/6, " width=", width/6, " >\n"),
     paste0(
       "<br><br><b>Figure S",fignum,
       ".</b> Coverage by ward and survey time point in the ", arm,
@@ -2018,4 +2111,3 @@ system(paste("open", file.out))
 # Report run time
 finish.time <- Sys.time() 
 finish.time - start.time
-
