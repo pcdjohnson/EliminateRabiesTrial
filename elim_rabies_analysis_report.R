@@ -23,7 +23,7 @@ final.run <- TRUE
 # Define vaccination coverage
 # Use vaccinated_M3 as the primary outcome - more reliable, although also lots of missing data
 # but include analysis of an alternative definition of coverage, vaccinated_M4,
-vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[1]
+vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[2]
 
 # Make simulations reproducible by setting RNG seed?
 set.rng.seed <- final.run
@@ -702,15 +702,23 @@ primary.analysis <-
   list(analysis.data = droplevels(dat[!is.na(dat$Vaccinated), ]))
 
 # Fit primary analysis full model
+primary.analysis$full.model.formula <- 
+  Vaccinated ~ 
+    Visit + Year + Trial_Arm + 
+    Visit:Year + Visit:Trial_Arm + Year:Trial_Arm + 
+    Visit:Year:Trial_Arm +
+    (1 | Household.file.id) + 
+    (1 | sub_village.rnd) + (1 | sub_village) + 
+    (1 | ward.rnd) + (1 | ward) + 
+    (1 | district.rnd) + (1 | district)
+# If using the alternative definition of vaccination coverage, drop Household.file.id 
+# random effect due to lack of information in data on its variance
+if(vaccination.definition == "Vaccinated_M4") {
+  primary.analysis$full.model.formula <- 
+    update(primary.analysis$full.model.formula, ~ . - (1 | Household.file.id))
+}
 primary.analysis$full.model <- 
-  glmmTMB(Vaccinated ~ 
-            Visit + Year + Trial_Arm + 
-            Visit:Year + Visit:Trial_Arm + Year:Trial_Arm + 
-            Visit:Year:Trial_Arm +
-            (1 | Household.file.id) + 
-            (1 | sub_village.rnd) + (1 | sub_village) + 
-            (1 | ward.rnd) + (1 | ward) + 
-            (1 | district.rnd) + (1 | district), 
+  glmmTMB(primary.analysis$full.model.formula, 
           family = binomial, data = primary.analysis$analysis.data)
 summary(primary.analysis$full.model)
 
@@ -847,16 +855,24 @@ secondary.analyses$no1$intervention.p.value <-
 # Because we want to predict coverage across the whole year, we need to fit a new model
 # where visits 1 and 2 are replaced by the exact day of the year when the dog was surveyed.
 # The vaccination year starts on November 1st and ends on October 31st.
+secondary.analyses$no2$full.model.formula <- 
+  Vaccinated ~ 
+    YearDay + Year + Trial_Arm + 
+    YearDay:Year + YearDay:Trial_Arm + Year:Trial_Arm + 
+    YearDay:Year:Trial_Arm +
+    (1 | Household.file.id) + 
+    (1 | sub_village) + (1 | sub_village.rnd) + 
+    (1 | ward) + (1 | ward.rnd) + 
+    (1 | district) + (1 | district.rnd)
+# If using the alternative definition of vaccination coverage, drop Household.file.id 
+# random effect due to lack of information in data on its variance
+if(vaccination.definition == "Vaccinated_M4") {
+  secondary.analyses$no2$full.model.formula <- 
+    update(secondary.analyses$no2$full.model.formula, ~ . - (1 | Household.file.id))
+}
 
 secondary.analyses$no2$full.model <- 
-  glmmTMB(Vaccinated ~ 
-            YearDay + Year + Trial_Arm + 
-            YearDay:Year + YearDay:Trial_Arm + Year:Trial_Arm + 
-            YearDay:Year:Trial_Arm +
-            (1 | Household.file.id) + 
-            (1 | sub_village) + (1 | sub_village.rnd) + 
-            (1 | ward) + (1 | ward.rnd) + 
-            (1 | district) + (1 | district.rnd), 
+  glmmTMB(secondary.analyses$no2$full.model.formula, 
           family = binomial, data = primary.analysis$analysis.data)
 logLik(secondary.analyses$no2$full.model)
 summary(secondary.analyses$no2$full.model)
@@ -1253,7 +1269,7 @@ secondary.analyses$no2$prop.estimates.overall <-
              paste0(my.format(lt.thresh.Trial_Arm$Estimate, ndp = 2),  " (",
                     my.format(lt.thresh.Trial_Arm$Estimate.ci.lo, ndp = 2), ", ",
                     my.format(lt.thresh.Trial_Arm$Estimate.ci.hi, ndp = 2), ")"))
-names(secondary.analyses$no2$prop.estimates.overall) <- c("Trial Arm", paste0("P(Coverage<", cov.thresh, ") (95% CI)"))
+names(secondary.analyses$no2$prop.estimates.overall) <- c("Trial Arm", paste0("P(Coverage&lt;", cov.thresh, ") (95% CI)"))
 secondary.analyses$no2$prop.estimates.overall
 
 # Secondary 3
@@ -1299,7 +1315,7 @@ round(cbind(Estimate = secondary.analyses$no3$var.diff.ratio.community.to.team,
 # Define the model formula
 secondary.analyses$no4$formula <- 
   brmsformula(Vaccinated ~ 
-                0 + Intercept +
+                Intercept +
                 Visit + Year + Trial_Arm + 
                 Visit:Year + Visit:Trial_Arm + Year:Trial_Arm + 
                 Visit:Year:Trial_Arm +
@@ -1309,8 +1325,15 @@ secondary.analyses$no4$formula <-
                 (1 | ward.rnd) + 
                 (1 | gr(ward, by = Trial_Arm)) + 
                 (1 | district.rnd) + 
-                (1 | district),
+                (1 | district) - 1,
               family = bernoulli())
+# If using the alternative definition of vaccination coverage, drop Household.file.id 
+# random effect due to lack of information in data on its variance
+if(vaccination.definition == "Vaccinated_M4") {
+  secondary.analyses$no4$formula <- 
+    update(secondary.analyses$no4$formula, ~ . - (1 | Household.file.id))
+}
+
 
 # Fit the model using brm
 
@@ -1333,6 +1356,9 @@ secondary.analyses$no4$full.model <-
 
 # Model diagnostics, optionally
 if(FALSE) {
+  
+  # Check the fit of the rpimary analysis model
+  simulateResiduals(primary.analysis$full.model, plot = TRUE, n = 1000, seed = 606505365)
   
   # Check visually that the chains look healthy, an informal check
   plot(secondary.analyses$no4$full.model)
