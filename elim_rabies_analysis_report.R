@@ -23,7 +23,7 @@ final.run <- TRUE
 # Define vaccination coverage
 # Use vaccinated_M3 as the primary outcome - more reliable, although also lots of missing data
 # but include analysis of an alternative definition of coverage, vaccinated_M4,
-vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[1]
+vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[2]
 
 # Make simulations reproducible by setting RNG seed?
 set.rng.seed <- final.run
