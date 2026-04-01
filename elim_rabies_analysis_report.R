@@ -23,7 +23,7 @@ final.run <- TRUE
 # Define vaccination coverage
 # Use vaccinated_M3 as the primary outcome - more reliable, although also lots of missing data
 # but include analysis of an alternative definition of coverage, vaccinated_M4,
-vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[2]
+vaccination.definition <- c(main = "Vaccinated_M3", alternative = "Vaccinated_M4")[1]
 
 # Make simulations reproducible by setting RNG seed?
 set.rng.seed <- final.run
@@ -80,7 +80,10 @@ prog.file<-paste0(prog.directory,prog.name,".R")
 file.out.directory <- 
   ifelse(vaccination.definition == "Vaccinated_M3", paste0(prog.directory,brief.purpose,"_report"), 
          paste0(prog.directory,brief.purpose,"_report_alt_outcome_definition"))
-file.out.name<-paste0(prog.name,".doc")
+file.out.name <-
+  paste0(prog.name, 
+         ifelse(vaccination.definition == "Vaccinated_M3", "", "_alt_outcome_definition"),
+         ".doc")
 file.out<-paste(file.out.directory,file.out.name,sep="/")
 
 # Create directories for figures and header/footer. 
